@@ -27,7 +27,17 @@ ln -s /path/to/skill-marketplace/plugins/example-skill ~/.claude/plugins/local/e
 
 ## 使い方
 
-インストール後、以下のようなリクエストでスキルがトリガーされます:
+### スラッシュコマンド（直接呼び出し）
+
+```
+/example-skill
+/example-skill description の書き方
+/example-skill ディレクトリ構造
+```
+
+### 自然言語（自動トリガー）
+
+以下のようなリクエストでもスキルが自動的にトリガーされます:
 
 - "スキルの作成方法を教えて"
 - "SKILL.md のフォーマットを見せて"
