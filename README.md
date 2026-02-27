@@ -42,13 +42,33 @@ cp -r plugins/example-skill/skills/example-skill ~/.copilot/skills/
 
 インストール後、`copilot` を起動して `/skills` コマンドで認識を確認できます。
 
-### その他のツール — 手動コピー（未検証）
+### Codex CLI — 手動コピー
 
-> 以下は未検証です。各ツールのドキュメントを確認してください。
+Codex CLI はスキルを以下のディレクトリから自動検出します：
+
+| スコープ | ディレクトリ | 用途 |
+|---------|------------|------|
+| ユーザー | `~/.agents/skills/` | 任意のリポジトリで使えるユーザー個人のスキル |
+| プロジェクト | `.agents/skills/` | リポジトリルートに配置するチーム共有スキル |
+| システム | `/etc/codex/skills/` | システム全体で共有（管理者向け） |
 
 ```bash
-cp -r plugins/example-skill/skills/example-skill ~/.codex/skills/         # Codex CLI
-cp -r plugins/example-skill/skills/example-skill ~/.opencode/skills/      # OpenCode
+# リポジトリをクローン（未実施の場合）
+git clone https://github.com/kght6123/skill-marketplace.git
+cd skill-marketplace
+
+# ユーザースキルとしてインストール
+cp -r plugins/example-skill/skills/example-skill ~/.agents/skills/
+```
+
+詳細は [Codex Skills ドキュメント](https://developers.openai.com/codex/skills/#where-to-save-skills) を参照してください。
+
+### OpenCode — 手動コピー（未検証）
+
+> 以下は未検証です。OpenCode のドキュメントを確認してください。
+
+```bash
+cp -r plugins/example-skill/skills/example-skill ~/.opencode/skills/
 ```
 
 ## リポジトリ構造
