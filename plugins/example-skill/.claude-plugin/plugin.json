@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "example-skill",
+  "version": "1.0.0",
+  "description": "An example skill demonstrating how to create and format Agent Skills for Claude Code",
+  "author": {
+    "name": "kght6123",
+    "url": "https://github.com/kght6123"
+  },
+  "license": "MIT",
+  "keywords": [
+    "skill",
+    "example",
+    "template",
+    "development",
+    "agent-skills"
+  ],
+  "skills": [
+    "skills/example-skill/SKILL.md"
+  ]
+}
