@@ -1,17 +1,17 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "skill-marketplace",
-  "description": "A collection of Agent Skills for Claude Code and other AI coding tools",
+  "description": "Agent Skills for Claude Code and other AI coding tools",
   "owner": {
     "name": "kght6123",
     "url": "https://github.com/kght6123"
   },
   "plugins": [
     {
-      "name": "example-skill",
-      "source": "./plugins/example-skill",
+      "name": "skill-marketplace",
+      "source": ".",
       "category": "development",
-      "description": "An example skill demonstrating the skill format and directory structure"
+      "description": "A collection of Agent Skills for multiple AI coding tools"
     }
   ]
 }

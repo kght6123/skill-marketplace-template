@@ -11,10 +11,10 @@ argument-hint: [topic]
 
 ## 説明すべき内容
 
-1. **SKILL.md フロントマターフィールド** — `name`, `description`, `version`, `license` の意味と使い方
+1. **SKILL.md フロントマターフィールド** — `name`, `description` の意味と使い方（公式フィールドのみ）
 2. **description の書き方** — AIがスキルを選択するトリガー文の書き方（"Use this skill when..." 形式）
-3. **ディレクトリ構造** — `plugins/<plugin-name>/skills/<skill-name>/SKILL.md` の構成
+3. **ディレクトリ構造** — `skills/<skill-name>/SKILL.md` の構成
 4. **コマンドとスキルの違い** — `commands/` (スラッシュコマンド) vs `skills/` (自動トリガー)
-5. **新しいスキルの追加手順** — 5ステップのチェックリスト
+5. **新しいスキルの追加手順** — `skills/` にディレクトリを追加するだけ
 
 引数が指定された場合（`$ARGUMENTS`）は、その特定のトピックに絞って詳しく説明してください。
