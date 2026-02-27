@@ -48,23 +48,26 @@ description: Security tool  # 短すぎる・具体性がない
 ```
 skill-marketplace/
 ├── .claude-plugin/
-│   ├── marketplace.json     # マーケットプレイス定義（source: "."）
-│   └── plugin.json          # プラグインメタデータ
-├── skills/
-│   └── <skill-name>/
-│       └── SKILL.md         # スキル本体（このファイルの形式）
-└── commands/
-    └── <skill-name>.md      # スラッシュコマンド定義（オプション）
+│   └── marketplace.json              # マーケットプレイス定義
+└── plugins/
+    └── <plugin-name>/                # 各スキルは独立したプラグイン
+        ├── .claude-plugin/
+        │   └── plugin.json           # プラグインメタデータ
+        ├── skills/
+        │   └── <skill-name>/
+        │       └── SKILL.md          # スキル本体（このファイルの形式）
+        └── commands/
+            └── <skill-name>.md       # スラッシュコマンド定義（オプション）
 ```
 
 ## 新しいスキルの作成手順
 
-1. `skills/<skill-name>/` ディレクトリを作成
-2. `skills/<skill-name>/SKILL.md` にスキル本体を記述（このファイルを参考に）
-3. 必要であれば `commands/<skill-name>.md` にスラッシュコマンドを追加
-4. `README.md` のスキル一覧テーブルを更新
-
-> スキルを追加するだけで自動認識されます。`marketplace.json` への追記は不要です。
+1. `plugins/<skill-name>/` ディレクトリを作成
+2. `plugins/<skill-name>/.claude-plugin/plugin.json` にプラグイン定義を記述
+3. `plugins/<skill-name>/skills/<skill-name>/SKILL.md` にスキル本体を記述（このファイルを参考に）
+4. 必要であれば `plugins/<skill-name>/commands/<skill-name>.md` にスラッシュコマンドを追加
+5. `.claude-plugin/marketplace.json` の `plugins` 配列にエントリを追加
+6. `README.md` のスキル一覧テーブルを更新
 
 ## コマンドとスキルの違い
 

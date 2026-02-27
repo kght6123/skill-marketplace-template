@@ -8,10 +8,10 @@
   },
   "plugins": [
     {
-      "name": "skill-marketplace",
-      "source": ".",
+      "name": "example-skill",
+      "source": "./plugins/example-skill",
       "category": "development",
-      "description": "A collection of Agent Skills for multiple AI coding tools"
+      "description": "An example skill demonstrating how to create and format Agent Skills"
     }
   ]
 }
