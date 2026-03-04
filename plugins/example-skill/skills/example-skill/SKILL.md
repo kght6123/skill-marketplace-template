@@ -3,6 +3,7 @@ name: example-skill
 description: Use this skill when the user asks how to create, format, or structure
   an Agent Skill. Triggers on "how do I create a skill", "show me SKILL.md format",
   "what fields does SKILL.md need", or "help me write a skill description".
+argument-hint: <how do I create a skill>
 ---
 
 # Example Skill — スキル作成ガイド
