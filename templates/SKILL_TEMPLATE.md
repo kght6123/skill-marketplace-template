@@ -12,7 +12,7 @@ argument-hint: <引数1> [--オプション1 <オプション1の値>] [--オプ
 
 ```
 plugins/
-└── your-skill-name/
+└── your-plugin-name/
     ├── .claude-plugin/
     │   └── plugin.json
     └── skills/
@@ -22,18 +22,18 @@ plugins/
 
 ## 1. plugin.json
 
-`plugins/your-skill-name/.claude-plugin/plugin.json`:
+`plugins/your-plugin-name/.claude-plugin/plugin.json`:
 
 ```json
 {
-  "name": "your-skill-name",
-  "description": "スキルの簡潔な説明"
+  "name": "your-plugin-name",
+  "description": "スキル群の簡潔な説明"
 }
 ```
 
 ## 2. SKILL.md
 
-`plugins/your-skill-name/skills/your-skill-name/SKILL.md`:
+`plugins/your-plugin-name/skills/your-skill-name/SKILL.md`:
 
 ```markdown
 ---
@@ -111,8 +111,8 @@ Claude Codeの応答例
 
 ## チェックリスト
 
-- [ ] `plugins/your-skill-name/.claude-plugin/plugin.json` を作成した
-- [ ] `plugins/your-skill-name/skills/your-skill-name/SKILL.md` を作成した
+- [ ] `plugins/your-plugin-name/.claude-plugin/plugin.json` を作成した
+- [ ] `plugins/your-plugin-name/skills/your-skill-name/SKILL.md` を作成した
 - [ ] SKILL.md のフロントマターに `name` と `description` を含めた
 - [ ] `description` にトリガーワードを3つ以上含めた
 - [ ] `marketplace.json` にスキルを追加した
