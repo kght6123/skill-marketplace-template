@@ -1,6 +1,6 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
-  "name": "skill-marketplace",
+  "name": "skill-marketplace-template",
   "description": "Agent Skills for Claude Code and other AI coding tools",
   "owner": {
     "name": "kght6123",
