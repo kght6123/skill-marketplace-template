@@ -28,7 +28,7 @@ export const DEFAULT_CONFIG = {
   //   rocket / hooray / eyes / +1 / -1 / laugh / confused / heart
   stamps: {
     approve: "rocket", // 承認・着手OK
-    park: "hooray",    // 後回し（parked）
+    park: "laugh",     // 後回し（parked）
     redo: ["-1", "confused", "eyes"], // 作り直し
   },
 

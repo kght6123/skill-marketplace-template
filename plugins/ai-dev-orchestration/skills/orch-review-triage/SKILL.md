@@ -51,7 +51,7 @@ node "$ORCH" state get <key>      # commentId から理解メモを引く
 <details><summary>返信案</summary>…</details>
 
 ---
-<sub>🚀 案どおり ／ 👎 案が違う（番号付きで返信）／ 🎉 後回し</sub>
+<sub>🚀 案どおり ／ 👎 案が違う（番号付きで返信）／ 😄 後回し</sub>
 ````
 
 ### 5. 投稿する

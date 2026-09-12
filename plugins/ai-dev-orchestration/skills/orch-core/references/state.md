@@ -46,7 +46,7 @@
 | implementing | 実装中 | |
 | pr-review | セルフ／レビュアー待ち | ✓ |
 | needs-human | 自動で進めない | ✓ |
-| parked | 後回しスタンプ（既定🎉） | |
+| parked | 後回しスタンプ（既定😄） | |
 | done | 完了 | |
 
 `candidate` だけは仕様の表に無い。並び順7を出すために追加した。

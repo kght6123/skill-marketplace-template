@@ -26,7 +26,7 @@ export function approveName(config) {
   return config?.stamps?.approve || "rocket";
 }
 export function parkName(config) {
-  return config?.stamps?.park || "hooray";
+  return config?.stamps?.park || "laugh";
 }
 export function redoNames(config) {
   return config?.stamps?.redo || ["-1", "confused", "eyes"];
