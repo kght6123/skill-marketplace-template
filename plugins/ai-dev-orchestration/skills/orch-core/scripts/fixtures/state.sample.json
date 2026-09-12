@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "updatedAt": "2026-09-12T09:00:00.000Z",
+  "lastSync": "2026-09-12T09:00:00.000Z",
+  "issues": {
+    "org/order-api#123": {
+      "key": "org/order-api#123", "depth": 1, "parent": null, "status": "pr-review",
+      "commentId": 2345678901, "approvedBy": "body", "blockedBy": [], "title": "期間指定API",
+      "milestoneDue": "2026-09-30", "enteredStatusAt": "2026-09-12T01:00:00.000Z",
+      "prs": [
+        { "number": 46, "order": 2, "headSha": "def5678", "selfApproved": true,
+          "triageCommentId": 3456789, "triageApproved": false, "merged": false }
+      ]
+    },
+    "org/order-api#124": {
+      "key": "org/order-api#124", "depth": 1, "parent": null, "status": "memo-review",
+      "commentId": 2345678902, "approvedBy": "body", "blockedBy": [], "title": "CSVの文字コード",
+      "milestoneDue": null, "enteredStatusAt": "2026-09-12T02:00:00.000Z", "prs": []
+    },
+    "org/admin-web#45": {
+      "key": "org/admin-web#45", "depth": 2, "parent": "org/order-api#123", "status": "split-review",
+      "commentId": 2345678903, "approvedBy": null, "blockedBy": [], "title": "画面に期間入力",
+      "milestoneDue": null, "enteredStatusAt": "2026-09-12T03:00:00.000Z", "prs": []
+    },
+    "org/admin-web#46": {
+      "key": "org/admin-web#46", "depth": 1, "parent": null, "status": "sizing",
+      "commentId": null, "approvedBy": "body", "blockedBy": [], "title": "ファイル名に期間を付与",
+      "milestoneDue": null, "enteredStatusAt": "2026-09-12T04:00:00.000Z", "prs": []
+    },
+    "org/admin-web#47": {
+      "key": "org/admin-web#47", "depth": 1, "parent": null, "status": "candidate",
+      "commentId": null, "approvedBy": null, "blockedBy": [], "title": "ソート順の改善",
+      "milestoneDue": null, "enteredStatusAt": "2026-09-12T05:00:00.000Z", "prs": []
+    },
+    "org/order-api#125": {
+      "key": "org/order-api#125", "depth": 1, "parent": null, "status": "ready",
+      "commentId": 2345678904, "approvedBy": "body", "blockedBy": ["org/order-api#123"],
+      "title": "集計APIの期間対応", "milestoneDue": null,
+      "enteredStatusAt": "2026-09-12T06:00:00.000Z", "prs": []
+    }
+  }
+}

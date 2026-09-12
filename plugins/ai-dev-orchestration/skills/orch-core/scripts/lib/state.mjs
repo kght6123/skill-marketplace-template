@@ -1,0 +1,91 @@
+// state.json の読み書き。AI は必ずこのモジュール経由（orch state ...）で触る。
+import fs from "node:fs";
+import path from "node:path";
+import { ORCH_HOME } from "./config.mjs";
+
+export const STATE_PATH = path.join(ORCH_HOME, "state.json");
+
+// 仕様2章の status 一覧。candidate は「本文に🚀がまだ無いIssue」で、
+// next-task の並び順7「本文スタンプ候補」を出すために追加したもの。
+export const STATUSES = [
+  "candidate",
+  "sizing",
+  "split-review",
+  "split-done",
+  "waiting-answer",
+  "memo-review",
+  "ready",
+  "implementing",
+  "pr-review",
+  "needs-human",
+  "parked",
+  "done",
+];
+
+// 人間待ちの status。ここが行列になる。
+export const HUMAN_WAITING = ["split-review", "memo-review", "pr-review", "needs-human"];
+
+export function emptyState() {
+  return { version: 1, updatedAt: null, lastSync: null, issues: {} };
+}
+
+export function loadState() {
+  if (!fs.existsSync(STATE_PATH)) return emptyState();
+  const parsed = JSON.parse(fs.readFileSync(STATE_PATH, "utf8"));
+  return { ...emptyState(), ...parsed };
+}
+
+export function saveState(state) {
+  fs.mkdirSync(ORCH_HOME, { recursive: true });
+  state.updatedAt = new Date().toISOString();
+  const tmp = `${STATE_PATH}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + "\n");
+  fs.renameSync(tmp, STATE_PATH); // 書き込み中に CLI が読んでも壊れないように
+  return state;
+}
+
+// "org/repo#123" を分解する
+export function parseKey(key) {
+  const m = /^([^/]+)\/([^#]+)#(\d+)$/.exec(key);
+  if (!m) throw new Error(`不正なキー: ${key}（org/repo#123 の形式）`);
+  return { owner: m[1], repo: m[2], nameWithOwner: `${m[1]}/${m[2]}`, number: Number(m[3]) };
+}
+
+export function newEntry(key, overrides = {}) {
+  return {
+    key,
+    depth: 1,
+    parent: null,
+    status: "candidate",
+    commentId: null,
+    approvedBy: null,
+    blockedBy: [],
+    prs: [],
+    title: null,
+    milestoneDue: null,
+    enteredStatusAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+export function setStatus(entry, status, extra = {}) {
+  if (!STATUSES.includes(status)) throw new Error(`未知の status: ${status}`);
+  if (entry.status !== status) entry.enteredStatusAt = new Date().toISOString();
+  entry.status = status;
+  Object.assign(entry, extra);
+  return entry;
+}
+
+export function listEntries(state, filter = {}) {
+  return Object.values(state.issues).filter((e) => {
+    if (filter.status && e.status !== filter.status) return false;
+    if (filter.statuses && !filter.statuses.includes(e.status)) return false;
+    if (filter.repo && !e.key.startsWith(`${filter.repo}#`)) return false;
+    return true;
+  });
+}
+
+// entry をブロックしている件数（並び順の第一キー）
+export function blockingCount(state, key) {
+  return Object.values(state.issues).filter((e) => (e.blockedBy || []).includes(key)).length;
+}

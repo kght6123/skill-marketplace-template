@@ -1,0 +1,14 @@
+orch — AI開発オーケストレーションの決定的な処理
+
+  orch init                                        $ORCH_HOME を作り、設定の雛形を置く
+  orch sync [--dry-run] [--rebuild]                GitHub差分とスタンプを読み、状態を遷移させる
+  orch queue [--human]                             行列の件数とWIP上限の空き
+  orch next [--mode memo|build] [--minutes N]      次の1件（--mode はAI用、無指定は人間用）
+  orch state list|get <key>|set <key> [--status s] [--set '{...}']
+  orch post --key <key> --kind memo|split|approve|triage --body <file> [--pr N] [--update]
+  orch lint memo <file> | orch lint pr <file> [--title "..."]
+  orch review run|record|status --key <key> --pr N [--step id] [--result f] [--files a,b]
+  orch merge-train [--dry-run]
+  orch conflict --files a.ts,b.ts
+
+終了コード: 0 正常 / 1 エラー / 2 lint違反（作り直し） / 3 needs_human（AIはここで止まる）
