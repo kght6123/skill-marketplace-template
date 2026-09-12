@@ -20,8 +20,10 @@ argument-hint: [init|status|config] [--repo org/repo]
 `.claude/settings.json`（権限・フック）とプロジェクトスキルが効かない。
 
 連携に使うのはプロセス起動・作業ディレクトリ・環境変数・標準出力・終了コードだけで、
-Claude Code 固有の機能は使わない。ワーカーのCLIは差し替えられる（Codex / OpenCode / Copilot CLI）。
-詳しくは `references/topology.md`。
+Claude Code 固有の機能は使わない。ワーカーのCLIは差し替えられる（Codex CLI / Copilot CLI など）。
+
+モデルは分けるとよい。**マネージャは良いモデル**（理解メモの質がこの仕組みの要）、
+**ワーカーは安いモデル**（承認済みのメモどおりに実装するだけ）。詳しくは `references/topology.md`。
 
 ---
 

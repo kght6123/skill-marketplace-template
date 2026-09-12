@@ -160,13 +160,13 @@ const promptFile = path.join(home, "task.md");
 fs.writeFileSync(promptFile, "implement it\n");
 const dry = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]);
 check("worktree を作ってその中で起動する", dry.cwd, path.join(home, "wt", "order-api-125"));
-check("ブランチは ai/ 接頭辞", dry.branch, "ai/125");
+check("ブランチは orch/ 接頭辞", dry.branch, "orch/125");
+check("最初は slot 1", dry.slot, 1);
 
 // --- ワーカーCLIの差し替え（Claude Code 限定にしない）----------------
 const presets = {
   "claude -p <prompt>": { command: "claude", args: ["-p"] },
   "codex exec <prompt>": { command: "codex", args: ["exec"] },
-  "opencode run <prompt>": { command: "opencode", args: ["run"] },
   "copilot -p <prompt> --allow-all-tools": {
     command: "copilot", args: ["-p", "{prompt}", "--allow-all-tools"],
   },
@@ -183,6 +183,22 @@ resetState({
 });
 check("stdin でプロンプトを渡す設定",
   json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]).promptVia, "stdin");
+
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt"),
+  worker: { command: "claude", args: ["-p"], model: "claude-sonnet-5" },
+});
+check("ワーカーのモデルを渡せる",
+  json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]).workerCommand,
+  "claude -p --model claude-sonnet-5 <prompt>");
+
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt"),
+  branchPrefix: "custom/",
+  worker: { command: "claude", args: ["-p"] },
+});
+check("ブランチ接頭辞を変えられる",
+  json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]).branch, "custom/125");
 
 // Claude Code ではない架空のCLIで、起動から state 反映まで通す
 const fakeCli = path.join(home, "fake-cli.sh");
@@ -205,6 +221,40 @@ const ran = json(["worker", "--key", "org/order-api#125", "--action", "implement
 check("Claude Code 以外のCLIでも1周する", ran.ok, true);
 check("ワーカーの結果が state に入る", ran.applied.prs.map((p) => p.number), [99]);
 check("ワーカーは worktree で動いている", ran.cwd, path.join(home, "wt", "order-api-125"));
+
+// 同じIssueに2本来たら worktree を連番で分ける
+const slowCli = path.join(home, "slow-cli.sh");
+fs.writeFileSync(slowCli, [
+  "#!/bin/sh",
+  "sleep 2",
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "notes": "$(pwd)" }',
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(slowCli, 0o755);
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt-slots"),
+  branchPrefix: "slots/",
+  worker: { command: slowCli, args: [], timeoutMin: 30 },
+});
+const both = await Promise.all([0, 300].map((delay) =>
+  new Promise((resolve) => {
+    setTimeout(() => {
+      const p = spawn("node", [orch, "worker", "--key", "org/order-api#125", "--prompt", promptFile], {
+        stdio: ["ignore", "pipe", "ignore"],
+        env: { ...process.env, ORCH_HOME: home },
+      });
+      let out = "";
+      p.stdout.on("data", (d) => (out += d));
+      p.on("close", () => resolve(JSON.parse(out)));
+    }, delay);
+  })));
+check("同時に来たら worktree の連番が分かれる", both.map((r) => r.slot).sort(), [1, 2]);
+check("ブランチも連番で分かれる", both.map((r) => r.branch).sort(), ["slots/125", "slots/125-2"]);
+const after = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]);
+check("終わった枠は再利用される", after.slot, 1);
 
 resetState({ repos: ["org/order-api"] });
 check("path が無ければ止まる（AIはcloneしない）",

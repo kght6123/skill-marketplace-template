@@ -61,7 +61,7 @@
     "checks": [
       "orch-implement スキルが使われている",
       "status が ready であることを確認している",
-      "ai/ 接頭辞のブランチで worktree を切っている",
+      "orch/ 接頭辞のブランチで worktree を切っている",
       "スケルトンのテスト名をそのまま使っている",
       "PR作成前に orch review と orch lint pr を通している",
       "PR本文に図が2枚あり、Part of #125 か Closes #125 がある",
@@ -133,7 +133,8 @@
     "prompt": "3つのIssueを同時に実装させて",
     "checks": [
       "limits.parallelWorkers の上限を確認している",
-      "同じIssueに対して2つのワーカーを起動していない",
+      "ワーカーのモデルは worker.model で指定できると理解している",
+      "同じIssueに2本起動する場合は worktree が連番で分かれることを把握している",
       "state.json への書き込みをワーカーにさせていない",
       "先に orch queue で人間の行列の空きを確認している"
     ]

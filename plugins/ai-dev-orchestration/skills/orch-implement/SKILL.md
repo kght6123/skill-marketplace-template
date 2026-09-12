@@ -43,10 +43,10 @@ gh issue view <number> --repo <org/repo> --json title,body,comments
 ### 2. worktree を切る
 
 ```bash
-git worktree add ../<repo>-ai-<number> -b ai/<number>-<短い説明>
+git worktree add ../<repo>-orch-<number> -b orch/<number>
 ```
 
-ブランチは必ず `ai/` 接頭辞。**`ai/` 以外のブランチに force push しない。**
+ブランチは必ず `orch/` 接頭辞。**`orch/` 以外のブランチに force push しない。**
 
 ### 3. テストから書く
 
@@ -78,7 +78,7 @@ node "$ORCH" lint pr /tmp/pr-body.md --title "feat(order-api): 期間指定でCS
 exit 2 なら作り直し。通ったら作成する。2本目以降は前のPRのブランチを base にする（stacked）。
 
 ```bash
-gh pr create --repo <org/repo> --base ai/<前のPRのブランチ> --head ai/<このPR> \
+gh pr create --repo <org/repo> --base orch/<前のPRのブランチ> --head orch/<このPR> \
   --title "..." --body-file /tmp/pr-body.md
 node "$ORCH" state set <key> --set '{"prs":[{"number":46,"order":2,"headSha":"...","merged":false}]}'
 ```
@@ -110,7 +110,7 @@ node "$ORCH" state set <key> --set '{"prs":[{"number":46,"order":2,"headSha":"..
   "key": "org/order-api#125",
   "action": "implement",
   "status": "pr-review",
-  "prs": [{ "number": 50, "order": 1, "headSha": "aaa111", "branch": "ai/125" }],
+  "prs": [{ "number": 50, "order": 1, "headSha": "aaa111", "branch": "orch/125" }],
   "review": [{ "reviewer": "memo-check", "findings": [] }],
   "comments": [{ "kind": "approve", "pr": 50, "bodyFile": "/abs/path/approve.md" }],
   "needs_human": false,
@@ -143,5 +143,6 @@ main をブランチにマージする形で対応し、force push はしない�
 - `gh pr merge` を叩かない。マージは `orch merge-train` だけ
 - テストが落ちたまま PR を作らない
 - スタック途中で needs-human になったら、それより後ろのPRは待機させる
+- 接頭辞は `orch.config.json` の `branchPrefix`（既定 `orch/`）で変えられる
 - 他のリポジトリのファイルを触らない。作業ディレクトリの外に出ない
 - エンベロープを出さずに終わらない。途中で止まる場合も `needs_human: true` で返す

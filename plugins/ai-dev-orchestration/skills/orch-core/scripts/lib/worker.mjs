@@ -21,9 +21,33 @@ function expandHome(p) {
   return p.startsWith("~") ? path.join(os.homedir(), p.slice(1)) : p;
 }
 
-// worktree を用意する。リポジトリのクローンはしない（人間が置いたものを使う）。
-export function ensureWorktree(config, key) {
-  const { nameWithOwner, repo, number } = parseKey(key);
+const LOCK_NAME = ".orch-worker.lock";
+
+// 同じIssueに複数のワーカーが来たら、worktree を連番で分ける。
+// slot 1: <repo>-<番号> / orch/<番号>
+// slot 2: <repo>-<番号>-2 / orch/<番号>-2 ...
+function slotPaths(config, key, slot) {
+  const { repo, number } = parseKey(key);
+  const suffix = slot === 1 ? "" : `-${slot}`;
+  return {
+    dir: path.join(worktreeRoot(config), `${repo}-${number}${suffix}`),
+    branch: `${config.branchPrefix || "orch/"}${number}${suffix}`,
+  };
+}
+
+// そのworktreeで今ワーカーが動いているか。落ちたプロセスのロックは時間で無効にする。
+function isBusy(dir, staleMs) {
+  const lock = path.join(dir, LOCK_NAME);
+  if (!fs.existsSync(lock)) return false;
+  try {
+    return Date.now() - fs.statSync(lock).mtimeMs < staleMs;
+  } catch {
+    return false;
+  }
+}
+
+function repoPathOf(config, key) {
+  const { nameWithOwner } = parseKey(key);
   const rc = repoConfig(config, nameWithOwner);
   if (!rc.path) {
     throw new Error(
@@ -34,18 +58,38 @@ export function ensureWorktree(config, key) {
   if (!fs.existsSync(path.join(repoPath, ".git"))) {
     throw new Error(`${repoPath} が git リポジトリではありません`);
   }
-  const branch = `ai/${number}`;
-  const dir = path.join(worktreeRoot(config), `${repo}-${number}`);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(path.dirname(dir), { recursive: true });
-    const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
-    const exists = execFileSync("git", ["-C", repoPath, "branch", "--list", branch], git).trim();
-    const args = exists
-      ? ["-C", repoPath, "worktree", "add", dir, branch]
-      : ["-C", repoPath, "worktree", "add", "-b", branch, dir];
-    execFileSync("git", args, git);
+  return repoPath;
+}
+
+// 空いている worktree を確保する。リポジトリのクローンはしない（人間が置いたものを使う）。
+export function ensureWorktree(config, key, { lock = false } = {}) {
+  const repoPath = repoPathOf(config, key);
+  const staleMs = (config.worker?.timeoutMin || 30) * 60_000;
+  const maxSlots = Math.max(1, config.limits?.parallelWorkers || 1);
+
+  for (let slot = 1; slot <= maxSlots; slot++) {
+    const { dir, branch } = slotPaths(config, key, slot);
+    if (isBusy(dir, staleMs)) continue; // 使用中なら次の連番へ
+
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(path.dirname(dir), { recursive: true });
+      const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+      const exists = execFileSync("git", ["-C", repoPath, "branch", "--list", branch], git).trim();
+      const args = exists
+        ? ["-C", repoPath, "worktree", "add", dir, branch]
+        : ["-C", repoPath, "worktree", "add", "-b", branch, dir];
+      execFileSync("git", args, git);
+    }
+    if (lock) fs.writeFileSync(path.join(dir, LOCK_NAME), `${process.pid} ${new Date().toISOString()}\n`);
+    return { dir, branch, slot, repoPath };
   }
-  return { dir, branch, repoPath };
+  throw new Error(
+    `${key} のワーカーが ${maxSlots} 本すべて動いています（limits.parallelWorkers）`,
+  );
+}
+
+export function releaseWorktree(dir) {
+  fs.rmSync(path.join(dir, LOCK_NAME), { force: true });
 }
 
 // ワーカーが最後に出力する結果。これ以外は読まない。
@@ -108,6 +152,8 @@ export function buildCommand(worker, prompt) {
   const args = worker.args || [];
   const hasPlaceholder = args.some((a) => a.includes("{prompt}"));
   const argv = args.map((a) => a.replace("{prompt}", prompt));
+  // モデル指定。ワーカーは安いモデル、マネージャは良いモデルにするのが基本
+  if (worker.model) argv.push(worker.modelFlag || "--model", worker.model);
   if (worker.promptVia !== "stdin" && !hasPlaceholder) argv.push(prompt);
   return { command: worker.command, argv, hasPlaceholder };
 }
@@ -115,7 +161,7 @@ export function buildCommand(worker, prompt) {
 // ワーカーを1件起動する。並行させたいときは、マネージャがこれを複数同時に呼ぶ。
 export function runWorker(config, { key, action, promptFile, dryRun = false }) {
   if (!loadState().issues[key]) throw new Error(`state に未登録: ${key}`);
-  const { dir, branch } = ensureWorktree(config, key);
+  const { dir, branch, slot } = ensureWorktree(config, key, { lock: !dryRun });
   const prompt = fs.readFileSync(promptFile, "utf8");
   const worker = config.worker;
   const { command, argv } = buildCommand(worker, prompt);
@@ -125,22 +171,27 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
     // プロンプト本文は長いので、表示では差し替える
     const shown = buildCommand(worker, "<prompt>");
     return {
-      dryRun: true, key, action, cwd: dir, branch,
+      dryRun: true, key, action, cwd: dir, branch, slot,
       workerCommand: [shown.command, ...shown.argv].join(" "),
       promptVia: viaStdin ? "stdin" : "arg",
     };
   }
 
-  const res = spawnSync(command, argv, {
-    cwd: dir,
-    encoding: "utf8",
-    timeout: (worker.timeoutMin || 30) * 60_000,
-    maxBuffer: 64 * 1024 * 1024,
-    // stdin は閉じる。開いたままだと EOF を待って止まるCLIがある（codex exec など）
-    stdio: viaStdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
-    input: viaStdin ? prompt : undefined,
-    env: { ...process.env, ORCH_ROLE: "worker", ORCH_KEY: key, ORCH_ACTION: action },
-  });
+  let res;
+  try {
+    res = spawnSync(command, argv, {
+      cwd: dir,
+      encoding: "utf8",
+      timeout: (worker.timeoutMin || 30) * 60_000,
+      maxBuffer: 64 * 1024 * 1024,
+      // stdin は閉じる。開いたままだと EOF を待って止まるCLIがある（codex exec など）
+      stdio: viaStdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
+      input: viaStdin ? prompt : undefined,
+      env: { ...process.env, ORCH_ROLE: "worker", ORCH_KEY: key, ORCH_ACTION: action },
+    });
+  } finally {
+    releaseWorktree(dir); // 連番の枠を空ける
+  }
   if (res.error) throw new Error(`ワーカーを起動できません: ${res.error.message}`);
 
   const envelope = parseEnvelope(res.stdout || "");
@@ -150,6 +201,7 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
       key,
       action,
       cwd: dir,
+      slot,
       exitCode: res.status,
       errors: envelope.errors,
       needs_human: true,
@@ -157,5 +209,5 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
     };
   }
   const applied = applyEnvelope(envelope.data);
-  return { ok: true, key, action, cwd: dir, branch, exitCode: res.status, applied, envelope: envelope.data };
+  return { ok: true, key, action, cwd: dir, branch, slot, exitCode: res.status, applied, envelope: envelope.data };
 }

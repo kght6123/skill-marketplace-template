@@ -41,8 +41,19 @@ Claude Code の設定は**セッションの作業ディレクトリ**に紐づ�
 
 **AIはクローンしない。** path が無ければ `orch worker` はエラーで止まる。人間に置き場所を聞く。
 
-worktree は `worktreeRoot`（既定 `$ORCH_HOME/worktrees`）の下に `<repo>-<issue番号>` で作られ、
-ブランチは `ai/<issue番号>`。`orch worker` が無ければ作る。
+worktree は `worktreeRoot`（既定 `$ORCH_HOME/worktrees`）の下に作られ、`orch worker` が無ければ作る。
+接頭辞は `branchPrefix`（既定 `orch/`）。
+
+同じIssueに複数のワーカーが来たら、連番で分ける。動いているワーカーは worktree に
+`.orch-worker.lock` を置くので、空いている番号が選ばれる。終われば1番から再利用される。
+
+| 本数 | ディレクトリ | ブランチ |
+|---|---|---|
+| 1本目 | `<repo>-125` | `orch/125` |
+| 2本目 | `<repo>-125-2` | `orch/125-2` |
+| 3本目 | `<repo>-125-3` | `orch/125-3` |
+
+連番の上限は `limits.parallelWorkers`。すべて埋まっていればエラーで止まる。
 
 ## 役割の境界（スクリプトが強制する）
 
@@ -83,8 +94,34 @@ state.json を書くのはマネージャだけなので、ワーカーを並行
 |---|---|
 | Claude Code | `{ "command": "claude", "args": ["-p"] }` |
 | Codex CLI | `{ "command": "codex", "args": ["exec"] }` |
-| OpenCode | `{ "command": "opencode", "args": ["run"] }` |
 | Copilot CLI | `{ "command": "copilot", "args": ["-p", "{prompt}", "--allow-all-tools"] }` |
+
+### モデルを分ける
+
+**マネージャは良いモデル、ワーカーは安いモデル**にするのが基本。理由は仕事の質が違うから。
+
+| | 仕事 | 推奨 |
+|---|---|---|
+| マネージャ | 理解メモ・分割案の生成。人間が読む文章の質がこの仕組みの要 | `claude-opus-5` |
+| ワーカー | 承認済みのメモとテスト名に沿った実装。範囲が決まっている | `claude-sonnet-5` |
+
+理解メモが長かったり的外れだと、人間の読む量が増えて元の問題に戻る。ここをケチらない。
+逆にワーカーは「メモに書いてあることを実装する」だけなので、安いモデルで足りる。
+
+ワーカーのモデルは設定で渡す。
+
+```json
+{ "worker": { "command": "claude", "args": ["-p"], "model": "claude-sonnet-5" } }
+```
+
+マネージャのモデルは設定では決められない。**人間が起動するときに指定する。**
+
+```bash
+claude --model claude-opus-5      # マネージャのセッション
+```
+
+`opus` `sonnet` のような短い別名も使える。Codex CLI / Copilot CLI も `--model` を持つので、
+`modelFlag` を変えれば同じ形で渡せる。
 
 `promptVia: "stdin"` にするとプロンプトを標準入力から渡す。既定では**標準入力は閉じて**起動する。
 開いたままだと EOF を待って止まるCLIがあるため（`codex exec` に既知の問題がある）。
@@ -114,7 +151,7 @@ node "$ORCH" apply --file /tmp/worker-output.txt
   "key": "org/order-api#125",
   "action": "implement",
   "status": "pr-review",
-  "prs": [{ "number": 50, "order": 1, "headSha": "aaa111", "branch": "ai/125" }],
+  "prs": [{ "number": 50, "order": 1, "headSha": "aaa111", "branch": "orch/125" }],
   "review": [{ "reviewer": "memo-check", "findings": [] }],
   "comments": [{ "kind": "approve", "pr": 50, "bodyFile": "/path/to/approve.md" }],
   "needs_human": false,
@@ -139,8 +176,8 @@ node "$ORCH" apply --file /tmp/worker-output.txt
 
 ## 並行実行
 
-マネージャが `orch worker` を複数同時に起動してよい。件数は `limits.parallelWorkers`（既定2）。
+マネージャが `orch worker` を複数同時に起動してよい。件数は `limits.parallelWorkers`（既定12）。
 
 - state.json への書き込みはロックで直列化される
-- 同じリポジトリの同じIssueに対して2つ起動しない（worktreeが衝突する）
+- 同じIssueに2本来ても worktree は連番で分かれる（上の表）
 - 人間の行列がボトルネックなので、並行度を上げても全体は速くならない。上げる前に `orch queue` を見る

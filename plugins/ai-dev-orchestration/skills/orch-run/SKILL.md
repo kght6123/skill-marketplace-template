@@ -54,8 +54,8 @@ node "$ORCH" worker --key org/order-api#125 --action implement --prompt /tmp/tas
 `orch worker` が worktree を用意し、そこを作業ディレクトリにしてワーカーを起動し、
 返ってきたエンベロープを検証して state に反映するところまでやる。
 
-**並行させる場合**は `orch worker` を同時に複数起動する。上限は `limits.parallelWorkers`（既定2）。
-同じIssueに対して2つ起動しない（worktreeが衝突する）。
+**並行させる場合**は `orch worker` を同時に複数起動する。上限は `limits.parallelWorkers`（既定12）。
+同じIssueに2本来ても worktree は連番（`<repo>-125`, `<repo>-125-2`）で分かれるので衝突しない。
 
 ```bash
 node "$ORCH" worker --key org/order-api#125 --action implement --prompt /tmp/a.md &

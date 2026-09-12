@@ -79,9 +79,9 @@ graph LR
 2本目以降は前のPRのブランチを base にして並行で出す。
 
 ```
-#45 (main ← ai/45)
- └ #46 (ai/45 ← ai/46)   ← [2/3]
-    └ #47 (ai/46 ← ai/47)
+#45 (main ← orch/45)
+ └ #46 (orch/45 ← orch/46)   ← [2/3]
+    └ #47 (orch/46 ← orch/47)
 ```
 
 前のPRがマージされて head ブランチが消えると、GitHub が次のPRの base を自動で main に切り替える。

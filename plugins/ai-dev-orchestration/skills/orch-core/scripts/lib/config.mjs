@@ -15,12 +15,22 @@ export const DEFAULT_CONFIG = {
   repos: [],
   // worktree を作る場所
   worktreeRoot: null,
+  // AIが作るブランチの接頭辞。force push を許すのはこの接頭辞だけ
+  branchPrefix: "orch/",
   // ワーカーの起動コマンド
   // ワーカーの起動コマンド。Claude Code 以外でも、
   // 「プロンプトを渡して標準出力を読む」CLIならそのまま使える。
   //   args に {prompt} があればその位置に差し込む。無ければ末尾に足す
   //   promptVia: "arg"（既定）/ "stdin"
-  worker: { command: "claude", args: ["-p"], promptVia: "arg", timeoutMin: 30 },
+  //   model を入れると modelFlag（既定 --model）と一緒に渡す
+  worker: {
+    command: "claude",
+    args: ["-p"],
+    promptVia: "arg",
+    model: null,
+    modelFlag: "--model",
+    timeoutMin: 30,
+  },
   wip: { selfReview: 3, memoReview: 3, splitReview: 2 },
   sizing: { maxPrs: 10, maxExamples: 5, maxDepth: 3 },
   nextTask: {
@@ -39,7 +49,7 @@ export const DEFAULT_CONFIG = {
     conflict: { humanPaths: ["**/auth/**", "**/migrations/**"], regenerate: {} },
   },
   reviewers: { default: { users: [], assign: "one", maxOpenPerReviewer: 3 }, repos: {}, away: [] },
-  limits: { memoPerTick: 3, implementPerBuild: 1, maxStackedPrs: 10, parallelWorkers: 2 },
+  limits: { memoPerTick: 3, implementPerBuild: 1, maxStackedPrs: 10, parallelWorkers: 12 },
 };
 
 function deepMerge(base, override) {
