@@ -112,6 +112,16 @@ export function workAction(entry, config) {
 const MEMO_ACTIONS = ["sizing", "split", "memo", "memo-update", "memo-redo", "split-redo", "create-children"];
 const BUILD_ACTIONS = ["implement", "implement-continue", "apply-triage"];
 
+// その action が人間待ちの行列を1つ増やすか。増やすものだけ枠を消費する。
+// 作り直し（redo）は同じ status に留まるので増えない。
+const CONSUMES = {
+  memo: "memoReview",
+  "memo-update": "memoReview",
+  split: "splitReview",
+  implement: "selfReview",
+  "implement-continue": "selfReview",
+};
+
 // mode: "memo"（tick）/ "build"（build）
 export function selectWork(state, config, mode, limit) {
   const report = queueReport(state, config);
@@ -141,7 +151,23 @@ export function selectWork(state, config, mode, limit) {
     candidates.push({ key: entry.key, action, entry });
   }
   candidates.sort((a, b) => compareWithinKind(state)(a.entry, b.entry));
-  return { queue: report, items: candidates.slice(0, max).map(({ key, action }) => ({ key, action })) };
+
+  // 残り枠を消費しながら選ぶ。満杯かどうかの真偽値だけで選ぶと、
+  // 残り1枠に3件入れて上限を超えられてしまう。
+  const room = Object.fromEntries(
+    Object.entries(report.queues).map(([name, q]) => [name, q.room]),
+  );
+  const items = [];
+  for (const { key, action } of candidates) {
+    if (items.length >= max) break;
+    const queue = CONSUMES[action];
+    if (queue) {
+      if (room[queue] <= 0) continue;
+      room[queue] -= 1;
+    }
+    items.push({ key, action });
+  }
+  return { queue: report, items };
 }
 
 function postBlockedReason(action, report) {

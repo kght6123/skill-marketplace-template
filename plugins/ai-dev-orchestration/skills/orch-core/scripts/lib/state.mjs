@@ -38,7 +38,20 @@ export function loadState() {
 const LOCK_PATH = `${STATE_PATH}.lock`;
 const LOCK_STALE_MS = 60_000;
 
+function holderIsAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0); // シグナルは送らず、存在だけ確かめる
+    return true;
+  } catch (err) {
+    return err.code === "EPERM"; // 他ユーザーのプロセス = 生きている
+  }
+}
+
 // 書き込みの排他。ワーカーを並行させても更新が消えないようにする。
+//
+// ロックの中でネットワークを叩かないこと。保持が長引くと stale 判定に
+// 引っかかり、生きているロックを別プロセスに消される。
 export function withLock(fn, { timeoutMs = 10_000 } = {}) {
   fs.mkdirSync(ORCH_HOME, { recursive: true });
   const deadline = Date.now() + timeoutMs;
@@ -46,24 +59,34 @@ export function withLock(fn, { timeoutMs = 10_000 } = {}) {
   for (;;) {
     try {
       fd = fs.openSync(LOCK_PATH, "wx");
-      fs.writeFileSync(fd, String(process.pid));
+      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
       break;
     } catch (err) {
       if (err.code !== "EEXIST") throw err;
-      // 落ちたプロセスが置いていったロックは一定時間で無効にする。
-      // statSync の直前に他プロセスがロックを外すことがあるので、その場合は取り直す。
+      // 直前に他プロセスがロックを外すことがあるので、その場合は取り直す
+      let raw = null;
       let age = 0;
       try {
+        raw = fs.readFileSync(LOCK_PATH, "utf8");
         age = Date.now() - fs.statSync(LOCK_PATH).mtimeMs;
-      } catch (statErr) {
-        if (statErr.code === "ENOENT") continue;
-        throw statErr;
+      } catch (readErr) {
+        if (readErr.code === "ENOENT") continue;
+        throw readErr;
       }
-      if (age > LOCK_STALE_MS) {
+      let pid = null;
+      try {
+        pid = JSON.parse(raw).pid;
+      } catch {
+        pid = null; // 旧形式や壊れたロック
+      }
+      // 持ち主が死んでいれば即座に、生きていても stale を超えたら剥がす
+      if (!holderIsAlive(pid) || age > LOCK_STALE_MS) {
         fs.rmSync(LOCK_PATH, { force: true });
         continue;
       }
-      if (Date.now() > deadline) throw new Error("state.json のロックを取得できません");
+      if (Date.now() > deadline) {
+        throw new Error(`state.json のロックを取得できません（保持: pid ${pid}）`);
+      }
       Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     }
   }

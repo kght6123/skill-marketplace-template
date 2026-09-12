@@ -1,6 +1,12 @@
 // GitHub の差分取得 → スタンプ読み取り → 状態遷移。AI は一切判断しない。
 // 仕様3.5: 状態の一覧取得は検索せず、state.json が持つコメントIDのリアクションを直接見る。
 //          新規Issueと回答だけ「前回実行以降の更新」で差分取得する。
+//
+// 2段構え。**ネットワークはロックの外で行う。**
+//   1. collectFacts … GitHub から事実を集める（ロックなし・時間がかかる）
+//   2. applyFacts   … 集めた事実で状態を進める（ロックあり・一瞬）
+// ロックを持ったまま GitHub を叩くと、遅い日に stale 判定へ引っかかり、
+// 別プロセスに生きたロックを消される。そこからロストアップデートが起きる。
 import { ghJson, fetchReactions } from "./gh.mjs";
 import { repoNames } from "./config.mjs";
 import { loadState, updateState, newEntry, setStatus, parseKey } from "./state.mjs";
@@ -18,45 +24,85 @@ function comment(nameWithOwner, id) {
   return ghJson(["api", `repos/${nameWithOwner}/issues/comments/${id}`], { allowFail: true });
 }
 
-function since(state) {
-  if (!state.lastSync) return null;
-  return state.lastSync.slice(0, 10);
+function since(snapshot) {
+  return snapshot.lastSync ? snapshot.lastSync.slice(0, 10) : null;
 }
 
-// 前回実行以降に更新された Issue を取り込む（未登録なら candidate として登録）
-function ingestIssues(state, config, transitions) {
+// ---------------------------------------------------------------- 1. 収集
+
+export function collectFacts(config, snapshot) {
+  const listed = {};
   for (const repo of repoNames(config)) {
-    const search = since(state) ? ["--search", `updated:>=${since(state)}`] : [];
-    const issues = ghJson(
-      [
-        "issue", "list", "--repo", repo, "--state", "open", "--limit", "100",
-        "--json", "number,title,updatedAt,milestone",
-        ...search,
-      ],
-      { allowFail: true },
-    );
-    for (const issue of issues || []) {
-      const key = `${repo}#${issue.number}`;
-      const entry = state.issues[key] || newEntry(key);
-      entry.title = issue.title;
-      entry.milestoneDue = issue.milestone?.dueOn ? issue.milestone.dueOn.slice(0, 10) : null;
-      if (!state.issues[key]) {
-        state.issues[key] = entry;
-        transitions.push({ key, from: null, to: entry.status, reason: "新規取り込み" });
-      }
-    }
+    const search = since(snapshot) ? ["--search", `updated:>=${since(snapshot)}`] : [];
+    listed[repo] =
+      ghJson(
+        [
+          "issue", "list", "--repo", repo, "--state", "open", "--limit", "100",
+          "--json", "number,title,updatedAt,milestone",
+          ...search,
+        ],
+        { allowFail: true },
+      ) || [];
   }
+
+  // 既知のIssueと、今回一覧に出てきたIssueの両方を見る
+  const keys = new Set(Object.keys(snapshot.issues));
+  for (const [repo, issues] of Object.entries(listed)) {
+    for (const issue of issues) keys.add(`${repo}#${issue.number}`);
+  }
+
+  const entries = {};
+  for (const key of keys) {
+    const known = snapshot.issues[key];
+    if (known?.status === "done") continue;
+    const { nameWithOwner, number } = parseKey(key);
+    const status = known?.status || "candidate";
+    const f = { prs: {} };
+
+    // 本文のスタンプは candidate と parked のときだけ見る（起点と復帰）
+    if (["candidate", "parked"].includes(status)) {
+      f.issue = ghJson(
+        ["issue", "view", String(number), "--repo", nameWithOwner, "--json", "updatedAt,body"],
+        { allowFail: true },
+      );
+      f.issueReactions = fetchReactions(nameWithOwner, "issue", number);
+    }
+    if (known?.commentId) {
+      f.comment = comment(nameWithOwner, known.commentId);
+      f.commentReactions = fetchReactions(nameWithOwner, "comment", known.commentId);
+    }
+    for (const pr of known?.prs || []) {
+      f.prs[pr.number] = {
+        view: ghJson(
+          ["pr", "view", String(pr.number), "--repo", nameWithOwner,
+           "--json", "state,headRefOid,reviewDecision,mergeable"],
+          { allowFail: true },
+        ),
+        approval: pr.approvalCommentId
+          ? {
+              comment: comment(nameWithOwner, pr.approvalCommentId),
+              reactions: fetchReactions(nameWithOwner, "comment", pr.approvalCommentId),
+            }
+          : null,
+        triage: pr.triageCommentId
+          ? {
+              comment: comment(nameWithOwner, pr.triageCommentId),
+              reactions: fetchReactions(nameWithOwner, "comment", pr.triageCommentId),
+            }
+          : null,
+      };
+    }
+    entries[key] = f;
+  }
+  return { listed, entries, collectedAt: new Date().toISOString() };
 }
 
-// Issue本文のスタンプ。🚀が起点、👀で後回し。
-function applyBodyStamps(entry, config, transitions) {
+// ---------------------------------------------------------------- 2. 適用
+
+// Issue本文のスタンプ。🚀が起点、👀で後回し。parked からの復帰もここ。
+function applyBodyStamps(entry, config, f, transitions) {
   if (!["candidate", "parked"].includes(entry.status)) return;
-  const { nameWithOwner, number } = parseKey(entry.key);
-  const issue = ghJson(
-    ["issue", "view", String(number), "--repo", nameWithOwner, "--json", "updatedAt,body"],
-    { allowFail: true },
-  );
-  const stamps = ownStamps(fetchReactions(nameWithOwner, "issue", number), config.account);
+  const stamps = ownStamps(f.issueReactions, config.account);
   if (stamps["👀"]) {
     if (entry.status !== "parked") {
       transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: "👀" });
@@ -64,21 +110,21 @@ function applyBodyStamps(entry, config, transitions) {
     }
     return;
   }
-  if (rocketIsValid(stamps, issue?.updatedAt)) {
-    transitions.push({ key: entry.key, from: entry.status, to: "sizing", reason: "本文に🚀" });
+  if (rocketIsValid(stamps, f.issue?.updatedAt)) {
+    // 👀 が外れて🚀が有効なら、parked からでも動き出す
+    transitions.push({
+      key: entry.key, from: entry.status, to: "sizing",
+      reason: entry.status === "parked" ? "👀が外れて🚀" : "本文に🚀",
+    });
     setStatus(entry, "sizing", { approvedBy: "body" });
   }
 }
 
 // AI が投稿したコメントのスタンプ。ここが状態遷移の本体。
-function applyCommentStamps(entry, config, transitions) {
-  const { nameWithOwner } = parseKey(entry.key);
-  if (entry.commentId) {
-    const c = comment(nameWithOwner, entry.commentId);
-    const stamps = ownStamps(
-      fetchReactions(nameWithOwner, "comment", entry.commentId),
-      config.account,
-    );
+function applyCommentStamps(entry, config, f, transitions) {
+  if (f.comment || f.commentReactions) {
+    const c = f.comment;
+    const stamps = ownStamps(f.commentReactions, config.account);
     const redo = redoStamp(stamps);
 
     if (stamps["👀"] && entry.status !== "parked") {
@@ -86,9 +132,8 @@ function applyCommentStamps(entry, config, transitions) {
       setStatus(entry, "parked");
       return;
     }
-    if (redo) {
-      entry.redo = redo; // 作り直しは next の workAction が拾う
-    }
+    if (redo) entry.redo = redo; // 作り直しは next の workAction が拾う
+
     if (entry.status === "memo-review" && !redo) {
       // 🚀は「コメント更新より後」かつ「確認事項がすべてチェック済み」のときだけ有効
       if (rocketIsValid(stamps, c?.updated_at) && allQuestionsAnswered(c?.body || "")) {
@@ -97,7 +142,7 @@ function applyCommentStamps(entry, config, transitions) {
       }
     }
     if (entry.status === "waiting-answer" && allQuestionsAnswered(c?.body || "")) {
-      entry.answersReady = true; // 回答反映モードの対象になる
+      entry.answersReady = true;
     }
     if (entry.status === "split-review" && !redo) {
       if (rocketIsValid(stamps, c?.updated_at)) {
@@ -118,36 +163,24 @@ function applyCommentStamps(entry, config, transitions) {
     }
   }
 
-  // PR に紐づくスタンプ
   for (const pr of entry.prs || []) {
-    if (pr.approvalCommentId) {
-      const stamps = ownStamps(
-        fetchReactions(nameWithOwner, "comment", pr.approvalCommentId),
-        config.account,
-      );
-      const c = comment(nameWithOwner, pr.approvalCommentId);
-      if (rocketIsValid(stamps, c?.updated_at)) pr.selfApproved = true;
+    const pf = f.prs?.[pr.number];
+    if (!pf) continue;
+    if (pf.approval) {
+      const stamps = ownStamps(pf.approval.reactions, config.account);
+      if (rocketIsValid(stamps, pf.approval.comment?.updated_at)) pr.selfApproved = true;
     }
-    if (pr.triageCommentId) {
-      const stamps = ownStamps(
-        fetchReactions(nameWithOwner, "comment", pr.triageCommentId),
-        config.account,
-      );
-      const c = comment(nameWithOwner, pr.triageCommentId);
-      if (rocketIsValid(stamps, c?.updated_at)) pr.triageApproved = true;
+    if (pf.triage) {
+      const stamps = ownStamps(pf.triage.reactions, config.account);
+      if (rocketIsValid(stamps, pf.triage.comment?.updated_at)) pr.triageApproved = true;
     }
   }
 }
 
 // PR の状態を取り込む（マージ済み・head SHA の変化）
-function refreshPrs(entry, transitions) {
-  const { nameWithOwner } = parseKey(entry.key);
+function refreshPrs(entry, f, transitions) {
   for (const pr of entry.prs || []) {
-    const view = ghJson(
-      ["pr", "view", String(pr.number), "--repo", nameWithOwner,
-       "--json", "state,headRefOid,reviewDecision,mergeable"],
-      { allowFail: true },
-    );
+    const view = f.prs?.[pr.number]?.view;
     if (!view) continue;
     if (view.headRefOid && pr.headSha && view.headRefOid !== pr.headSha) {
       // 修正依頼への対応でプッシュされた → 承認は無効
@@ -179,27 +212,45 @@ function closeParents(state, transitions) {
   }
 }
 
-function syncInto(state, config) {
+export function applyFacts(state, config, facts) {
   const transitions = [];
-  ingestIssues(state, config, transitions);
-  for (const entry of Object.values(state.issues)) {
-    if (["done", "parked"].includes(entry.status)) continue;
-    applyBodyStamps(entry, config, transitions);
-    applyCommentStamps(entry, config, transitions);
-    refreshPrs(entry, transitions);
+
+  for (const [repo, issues] of Object.entries(facts.listed)) {
+    for (const issue of issues) {
+      const key = `${repo}#${issue.number}`;
+      const entry = state.issues[key] || newEntry(key);
+      entry.title = issue.title;
+      entry.milestoneDue = issue.milestone?.dueOn ? issue.milestone.dueOn.slice(0, 10) : null;
+      if (!state.issues[key]) {
+        state.issues[key] = entry;
+        transitions.push({ key, from: null, to: entry.status, reason: "新規取り込み" });
+      }
+    }
   }
+
+  for (const [key, f] of Object.entries(facts.entries)) {
+    const entry = state.issues[key];
+    if (!entry || entry.status === "done") continue;
+    applyBodyStamps(entry, config, f, transitions);
+    // 👀 が付いたままなら、ここで終わり。外れていれば上で sizing に戻っている
+    if (entry.status === "parked") continue;
+    applyCommentStamps(entry, config, f, transitions);
+    refreshPrs(entry, f, transitions);
+  }
+
   closeParents(state, transitions);
-  state.lastSync = new Date().toISOString();
+  state.lastSync = facts.collectedAt;
   return { transitions, tracked: Object.keys(state.issues).length };
 }
 
 export function sync(config, { dryRun = false } = {}) {
-  if (dryRun) return { ...syncInto(loadState(), config), dryRun: true };
-  return { ...updateState((state) => syncInto(state, config)), dryRun: false };
+  const facts = collectFacts(config, loadState()); // ← ロックなし
+  if (dryRun) return { ...applyFacts(loadState(), config, facts), dryRun: true };
+  return { ...updateState((state) => applyFacts(state, config, facts)), dryRun: false };
 }
 
 // state.json を失ったときの再構築。コメントの目印から辿る。
-function rebuildInto(state, config) {
+export function rebuild(config, { dryRun = false } = {}) {
   const found = [];
   for (const repo of repoNames(config)) {
     const issues = ghJson(
@@ -214,20 +265,18 @@ function rebuildInto(state, config) {
       for (const c of comments || []) {
         for (const [kind, re] of Object.entries(MARKERS)) {
           if (!re.test(c.body || "")) continue;
-          const key = `${repo}#${issue.number}`;
-          const entry = state.issues[key] || newEntry(key, { title: issue.title });
-          if (kind === "memo") entry.commentId = c.id;
-          if (kind === "split") entry.commentId = c.id;
-          state.issues[key] = entry;
-          found.push({ key, kind, commentId: c.id });
+          found.push({ key: `${repo}#${issue.number}`, title: issue.title, kind, commentId: c.id });
         }
       }
     }
   }
-  return { found };
-}
-
-export function rebuild(config, { dryRun = false } = {}) {
-  if (dryRun) return { ...rebuildInto(loadState(), config), dryRun: true };
-  return { ...updateState((state) => rebuildInto(state, config)), dryRun: false };
+  if (dryRun) return { found, dryRun: true };
+  updateState((state) => {
+    for (const hit of found) {
+      const entry = state.issues[hit.key] || newEntry(hit.key, { title: hit.title });
+      if (["memo", "split"].includes(hit.kind)) entry.commentId = hit.commentId;
+      state.issues[hit.key] = entry;
+    }
+  });
+  return { found, dryRun: false };
 }

@@ -7,6 +7,16 @@ import { openQuestions } from "./stamps.mjs";
 
 const KINDS = ["memo", "split", "approve", "triage"];
 
+// gh の -f/--raw-field は文字列をそのまま渡す。ファイルを読ませるのは -F/--field。
+// -f で書くと "@/tmp/memo.md" という文字列が本文として投稿される。
+export function commentArgs({ nameWithOwner, number, commentId, bodyFile }) {
+  const path = commentId
+    ? `repos/${nameWithOwner}/issues/comments/${commentId}`
+    : `repos/${nameWithOwner}/issues/${number}/comments`;
+  const method = commentId ? ["-X", "PATCH"] : [];
+  return ["api", ...method, path, "-F", `body=@${bodyFile}`];
+}
+
 function postComment(nameWithOwner, number, bodyFile) {
   if (isDryRun()) {
     ghWrite(["api", `repos/${nameWithOwner}/issues/${number}/comments`], {
@@ -14,10 +24,7 @@ function postComment(nameWithOwner, number, bodyFile) {
     });
     return { id: 0, dryRun: true };
   }
-  return ghJson([
-    "api", `repos/${nameWithOwner}/issues/${number}/comments`,
-    "-f", `body=@${bodyFile}`,
-  ]);
+  return ghJson(commentArgs({ nameWithOwner, number, bodyFile }));
 }
 
 function updateComment(nameWithOwner, commentId, bodyFile) {
@@ -27,10 +34,7 @@ function updateComment(nameWithOwner, commentId, bodyFile) {
     });
     return { id: commentId, dryRun: true };
   }
-  return ghJson([
-    "api", "-X", "PATCH", `repos/${nameWithOwner}/issues/comments/${commentId}`,
-    "-f", `body=@${bodyFile}`,
-  ]);
+  return ghJson(commentArgs({ nameWithOwner, commentId, bodyFile }));
 }
 
 // 旧コメントは消さずに折りたたむ（履歴を残す）

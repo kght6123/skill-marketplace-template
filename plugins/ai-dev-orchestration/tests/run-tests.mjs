@@ -82,6 +82,19 @@ check("空きがあれば着手する", json(["next", "--mode", "build"]).items,
   { key: "org/order-api#125", action: "implement" },
 ]);
 
+// 残り1枠に複数投入できないこと（満杯かどうかの真偽値だけで選ぶと破れる）
+resetState({ wip: { memoReview: 3, splitReview: 2, selfReview: 3 } });
+for (const key of ["org/order-api#123", "org/order-api#124"]) {
+  run(["state", "set", key, "--status", "memo-review"]);
+}
+for (const key of ["org/admin-web#46", "org/admin-web#47", "org/order-api#125"]) {
+  run(["state", "set", key, "--status", "sizing",
+    "--set", '{"sizing":{"estimatedPrs":2,"examples":2},"blockedBy":[]}']);
+}
+const room1 = json(["next", "--mode", "memo"]);
+check("残り1枠なら1件しか選ばない", room1.items.length, 1);
+check("消費するのは行列を増やす action だけ", room1.items[0].action, "memo");
+
 // --- 依存 -------------------------------------------------------------
 resetState();
 check("依存先が done でなければ着手しない", json(["next", "--mode", "build"]).items, []);
@@ -285,6 +298,38 @@ check("ブランチも連番で分かれる", both.map((r) => r.branch).sort(), 
 const after = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]);
 check("終わった枠は再利用される", after.slot, 1);
 
+// --dry-run は副作用なし
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt-dry"),
+  branchPrefix: "dry/", // 前のテストが作ったブランチと混ざらないように
+  worker: { command: "claude", args: ["-p"] },
+});
+const dryPlan = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]);
+check("dry-run は worktree を作らない", fs.existsSync(dryPlan.cwd), false);
+check("dry-run はブランチも作らない",
+  execFileSync("git", ["-C", repoPath, "branch", "--list", dryPlan.branch], { encoding: "utf8" }).trim(),
+  "");
+
+// ワーカーが別の key を返しても、その state は触らせない
+const liarCli = path.join(home, "liar-cli.sh");
+fs.writeFileSync(liarCli, [
+  "#!/bin/sh",
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "org/order-api#123", "action": "implement", "status": "done" }',
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(liarCli, 0o755);
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt-liar"),
+  worker: { command: liarCli, args: [] },
+});
+const liar = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile], { expectExit: 3 });
+check("依頼と違う key のエンベロープは拒否する", liar.needs_human, true);
+check("別Issueの state は変わらない",
+  json(["state", "get", "org/order-api#123"]).entry.status, "pr-review");
+
 resetState({ repos: ["org/order-api"] });
 check("path が無ければ止まる（AIはcloneしない）",
   json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"], { expectExit: 1 }).ok,
@@ -308,6 +353,104 @@ check("並行して書いても更新が消えない",
         .filter((k) => k.startsWith("org/parallel#")).length
     : 0,
   12);
+
+// --- 境界が嘘をついたとき ---------------------------------------------
+// ここから先は偽の gh を PATH に置いて、GitHub 側の異常を再現する。
+const ghDir = path.join(home, "bin");
+fs.mkdirSync(ghDir, { recursive: true });
+fs.writeFileSync(
+  path.join(ghDir, "gh"),
+  `#!/bin/sh\nexec node ${path.join(here, "fake-gh.mjs")} "$@"\n`,
+);
+fs.chmodSync(path.join(ghDir, "gh"), 0o755);
+
+const scenarioFile = path.join(home, "scenario.json");
+function withGh(scenario, extra = {}) {
+  fs.writeFileSync(scenarioFile, JSON.stringify(scenario));
+  return {
+    PATH: `${ghDir}:${process.env.PATH}`,
+    FAKE_GH_SCENARIO: scenarioFile,
+    ...extra,
+  };
+}
+
+// 1. 投稿の本文が「ファイルの中身」になっているか（-f だと "@/tmp/..." が飛ぶ）
+resetState();
+const bodyOut = path.join(home, "posted-body.txt");
+const argsOut = path.join(home, "gh-args.txt");
+run(["state", "set", "org/order-api#124", "--set", '{"commentId":null}']);
+run(["post", "--key", "org/order-api#124", "--kind", "memo", "--body", path.join(fixtures, "memo-ok.md")],
+  { env: withGh({ postedComment: { id: 555 } }, { FAKE_GH_BODY: bodyOut, FAKE_GH_ARGS: argsOut }) });
+check("投稿の本文がファイルの中身になる",
+  fs.readFileSync(bodyOut, "utf8").includes("## 理解メモ"), true);
+check("gh には -F で渡す（-f だとパス文字列が投稿される）",
+  fs.readFileSync(argsOut, "utf8").includes('"-F"'), true);
+check("投稿した commentId を state に記録する",
+  json(["state", "get", "org/order-api#124"]).entry.commentId, 555);
+
+// 2. 未解決スレッドを取れないときはマージしない
+resetState();
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review",
+  prs: [{ number: 46, order: 1, headSha: "abc123", merged: false }],
+})]);
+const mergeableView = {
+  state: "OPEN", headRefOid: "abc123", reviewDecision: "APPROVED", mergeable: "MERGEABLE",
+  statusCheckRollup: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+  latestReviews: [{ state: "APPROVED", commit: { oid: "abc123" } }],
+};
+const ghDown = json(["merge-train"], { env: withGh({ prView: mergeableView, graphql: "fail" }) });
+check("スレッドを取得できなければマージしない", ghDown.results[0].merged, false);
+check("理由に取得失敗を挙げる",
+  ghDown.results[0].reasons.some((r) => r.includes("取得できない")), true);
+
+// outdated でも未解決なら数える
+const outdated = json(["merge-train"], { env: withGh({
+  prView: mergeableView,
+  graphql: { data: { repository: { pullRequest: { reviewThreads: {
+    nodes: [{ isResolved: false }], pageInfo: { hasNextPage: false, endCursor: null },
+  } } } } },
+}) });
+check("未解決スレッドが残っていればマージしない",
+  outdated.results[0].reasons.some((r) => r.includes("未解決")), true);
+
+// 3. parked は 👀 が外れれば復帰する
+resetState();
+run(["state", "set", "org/order-api#124", "--status", "parked"]);
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [{ content: "rocket", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
+}) });
+check("👀 が外れて🚀があれば parked から戻る",
+  json(["state", "get", "org/order-api#124"]).entry.status, "sizing");
+
+// 👀 が残っていれば parked のまま
+resetState();
+run(["state", "set", "org/order-api#124", "--status", "parked"]);
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [
+    { content: "eyes", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } },
+    { content: "rocket", created_at: "2026-09-12T02:00:00Z", user: { login: "kght6123" } },
+  ],
+}) });
+check("👀 が残っていれば parked のまま",
+  json(["state", "get", "org/order-api#124"]).entry.status, "parked");
+
+// 4. sync はロックを持ったままGitHubを待たない
+resetState();
+const slowSync = spawn("node", [orch, "sync"], {
+  stdio: "ignore",
+  env: { ...process.env, ORCH_HOME: home, ...withGh({ issueList: [], delayMs: 1500 }) },
+});
+await new Promise((r) => setTimeout(r, 300));
+const startedAt = Date.now();
+run(["state", "set", "org/lockcheck#1", "--status", "sizing"]);
+const waited = Date.now() - startedAt;
+await new Promise((r) => slowSync.on("close", r));
+check("sync 中でも他プロセスが state を書ける（ロックを長く持たない）", waited < 1000, true);
 
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} 件が失敗` : "\nすべて成功");

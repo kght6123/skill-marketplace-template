@@ -5,18 +5,39 @@ import { loadState, updateState, parseKey } from "./state.mjs";
 
 const OK_CHECK = ["SUCCESS", "NEUTRAL", "SKIPPED", "EXPECTED"];
 
+// 未解決のレビュースレッド数。取得できなければ null を返す。
+//
+// null と 0 を混ぜてはいけない。混ぜると API エラーのときに「未解決ゼロ」と
+// 読めてしまい、安全側ではなくマージ側に倒れる。
+// outdated でも未解決なら未解決として数える（isOutdated は解決の意味ではない）。
 function unresolvedThreads(nameWithOwner, number) {
   const [owner, repo] = nameWithOwner.split("/");
-  const query = `query($owner:String!,$repo:String!,$number:Int!){
-    repository(owner:$owner,name:$repo){
-      pullRequest(number:$number){ reviewThreads(first:100){ nodes{ isResolved isOutdated } } }
-    }}`;
-  const out = ghJson(
-    ["api", "graphql", "-f", `query=${query}`, "-F", `owner=${owner}`, "-F", `repo=${repo}`, "-F", `number=${number}`],
-    { allowFail: true },
-  );
-  const nodes = out?.data?.repository?.pullRequest?.reviewThreads?.nodes || [];
-  return nodes.filter((n) => !n.isResolved && !n.isOutdated).length;
+  let cursor = null;
+  let count = 0;
+  for (let page = 0; page < 20; page++) {
+    const query = `query($owner:String!,$repo:String!,$number:Int!,$after:String){
+      repository(owner:$owner,name:$repo){
+        pullRequest(number:$number){
+          reviewThreads(first:100, after:$after){
+            nodes{ isResolved }
+            pageInfo{ hasNextPage endCursor }
+          }
+        }
+      }}`;
+    const args = [
+      "api", "graphql", "-f", `query=${query}`,
+      "-F", `owner=${owner}`, "-F", `repo=${repo}`, "-F", `number=${number}`,
+    ];
+    if (cursor) args.push("-F", `after=${cursor}`);
+    const out = ghJson(args, { allowFail: true });
+    const threads = out?.data?.repository?.pullRequest?.reviewThreads;
+    // 取得失敗・GraphQLエラー・想定外の形は、すべて「わからない」として扱う
+    if (!threads || !Array.isArray(threads.nodes) || out.errors) return null;
+    count += threads.nodes.filter((n) => !n.isResolved).length;
+    if (!threads.pageInfo?.hasNextPage) return count;
+    cursor = threads.pageInfo.endCursor;
+  }
+  return null; // ページが多すぎる。判断できないので止める
 }
 
 // マージ条件をすべて評価する。1つでも欠ければマージしない。
@@ -48,7 +69,8 @@ export function evaluate(entry, pr) {
   if (checks.some((c) => c.status && c.status !== "COMPLETED")) reasons.push("CI が実行中");
 
   const open = unresolvedThreads(nameWithOwner, pr.number);
-  if (open > 0) reasons.push(`未解決のレビュースレッドが ${open} 件`);
+  if (open === null) reasons.push("未解決のレビュースレッドを取得できない（判断できないのでマージしない）");
+  else if (open > 0) reasons.push(`未解決のレビュースレッドが ${open} 件`);
   if (pr.triageCommentId && !pr.triageApplied) reasons.push("指摘の対応確認が未完了");
 
   // スタック内の前のPRがすべてマージ済みか

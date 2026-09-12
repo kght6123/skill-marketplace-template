@@ -61,6 +61,21 @@ function repoPathOf(config, key) {
   return repoPath;
 }
 
+// 割り当て先を計算するだけ。作らない（--dry-run 用）。
+export function planWorktree(config, key) {
+  const repoPath = repoPathOf(config, key);
+  const staleMs = (config.worker?.timeoutMin || 30) * 60_000;
+  const maxSlots = Math.max(1, config.limits?.parallelWorkers || 1);
+  for (let slot = 1; slot <= maxSlots; slot++) {
+    const { dir, branch } = slotPaths(config, key, slot);
+    if (isBusy(dir, staleMs)) continue;
+    return { dir, branch, slot, repoPath, exists: fs.existsSync(dir) };
+  }
+  throw new Error(
+    `${key} の worktree が ${maxSlots} 枠すべて使用中です（実行中か、別の場所で checked out）。limits.parallelWorkers を見てください`,
+  );
+}
+
 // 空いている worktree を確保する。リポジトリのクローンはしない（人間が置いたものを使う）。
 export function ensureWorktree(config, key, { lock = false } = {}) {
   const repoPath = repoPathOf(config, key);
@@ -170,21 +185,24 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
     throw new Error(`phase ${config.phase} では実装を動かしません（実装は phase 4 から）`);
   }
   if (!loadState().issues[key]) throw new Error(`state に未登録: ${key}`);
-  const { dir, branch, slot } = ensureWorktree(config, key, { lock: !dryRun });
   const prompt = fs.readFileSync(promptFile, "utf8");
   const worker = config.worker;
-  const { command, argv } = buildCommand(worker, prompt);
   const viaStdin = worker.promptVia === "stdin";
 
   if (dryRun) {
-    // プロンプト本文は長いので、表示では差し替える
+    // --dry-run は副作用なし。worktree もブランチも作らない。
+    const plan = planWorktree(config, key);
     const shown = buildCommand(worker, "<prompt>");
     return {
-      dryRun: true, key, action, cwd: dir, branch, slot,
+      dryRun: true, key, action,
+      cwd: plan.dir, branch: plan.branch, slot: plan.slot, worktreeExists: plan.exists,
       workerCommand: [shown.command, ...shown.argv].join(" "),
       promptVia: viaStdin ? "stdin" : "arg",
     };
   }
+
+  const { dir, branch, slot } = ensureWorktree(config, key, { lock: true });
+  const { command, argv } = buildCommand(worker, prompt);
 
   let res;
   try {
@@ -204,6 +222,11 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
   if (res.error) throw new Error(`ワーカーを起動できません: ${res.error.message}`);
 
   const envelope = parseEnvelope(res.stdout || "");
+  // ワーカーは信用しない実行主体。渡した key 以外の state は触らせない。
+  if (envelope.ok && envelope.data.key !== key) {
+    envelope.ok = false;
+    envelope.errors = [`エンベロープの key が違う（依頼: ${key} / 返答: ${envelope.data.key}）`];
+  }
   if (!envelope.ok) {
     return {
       ok: false,

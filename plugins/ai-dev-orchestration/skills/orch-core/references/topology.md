@@ -46,6 +46,7 @@ worktree は `worktreeRoot`（既定 `$ORCH_HOME/worktrees`）の下に作られ
 
 同じIssueに複数のワーカーが来たら、連番で分ける。動いているワーカーは worktree に
 `.orch-worker.lock` を置くので、空いている番号が選ばれる。終われば1番から再利用される。
+`--dry-run` は割り当て先を計算して返すだけで、worktree もブランチも作らない。
 
 | 本数 | ディレクトリ | ブランチ |
 |---|---|---|
@@ -174,7 +175,7 @@ Codex CLI / Copilot CLI も `--model` を持つので、`modelFlag` を変えれ
 自動起動を使わなくてもよい。完全にツール非依存で回すなら、次の2ステップで足りる。
 
 ```bash
-# 1. 起動すべきコマンドと作業ディレクトリを出す（worktree もここで作られる）
+# 1. 起動すべきコマンドと作業ディレクトリを出す（--dry-run は何も作らない）
 node "$ORCH" worker --key org/order-api#125 --prompt /tmp/task.md --dry-run
 
 # 2. 人間が好きなツールでそこで作業し、出力を保存して反映する
