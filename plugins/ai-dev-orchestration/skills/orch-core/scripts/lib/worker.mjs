@@ -166,6 +166,9 @@ export function buildCommand(worker, prompt) {
 
 // ワーカーを1件起動する。並行させたいときは、マネージャがこれを複数同時に呼ぶ。
 export function runWorker(config, { key, action, promptFile, dryRun = false }) {
+  if ((config.phase ?? 5) < 4) {
+    throw new Error(`phase ${config.phase} では実装を動かしません（実装は phase 4 から）`);
+  }
   if (!loadState().issues[key]) throw new Error(`state に未登録: ${key}`);
   const { dir, branch, slot } = ensureWorktree(config, key, { lock: !dryRun });
   const prompt = fs.readFileSync(promptFile, "utf8");

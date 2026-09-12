@@ -45,6 +45,7 @@ node "$ORCH" profile --human             # 今どれで動いているか
 ```json
 {
   "account": "kght6123",
+  "phase": 5,
   "repos": [
     { "name": "org/order-api", "path": "~/src/order-api" },
     { "name": "org/admin-web", "path": "~/src/admin-web" }
@@ -107,6 +108,7 @@ node "$ORCH" profile --human             # 今どれで動いているか
 |---|---|
 | `profile` / `profiles` | 設定の上書き。名前はマネージャのモデル。`ORCH_PROFILE` と `--profile` が優先 |
 | `manager.model` | マネージャの起動に使うモデルの目安。`orch profile` が起動コマンドを出す |
+| `phase` | どこまで自動でやるか（1〜5、既定5）。4未満で実装、5未満でマージが止まる。詳細は `rollout.md` |
 | `account` | スタンプの押し主判定。**必須** |
 | `repos` | 監視対象。**必須**。`"org/repo"` でも `{ name, path }` でも書ける |
 | `repos[].path` | ローカルのチェックアウト先。ワーカーの起動に要る。**AIはcloneしない** |

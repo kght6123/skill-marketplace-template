@@ -78,6 +78,7 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 | `orch review run\|record\|status` | AIレビューのpipeline |
 | `orch merge-train` | マージ条件の判定とマージ |
 | `orch profile` | 今のプロファイル（モデルの組み合わせ）とマネージャの起動コマンド |
+| `orch phase` | 今の段。実装とマージが有効かどうか |
 | `orch worker --key K --action A --prompt f` | 各リポジトリの worktree でワーカーを起動する |
 | `orch apply --file f` | ワーカーの結果エンベロープを state に反映する |
 | `orch conflict --files a,b` | 競合を自動解決とhuman確認に分類 |
@@ -112,15 +113,19 @@ state.json を失った場合は `orch sync --rebuild` でコメントの目印�
 
 リアクション作成APIを拒否しておくと、AIが自分で🚀を押して自分の作ったものを承認する事故が起きない。
 
-## 6. 導入の順番
+## 6. 段（どこまで自動でやるか）
 
-**最初から全部自動化しない。** 長いメモが大量に生成されて読む量が増えると、元の問題に戻る。
+`orch.config.json` の `phase` が決める。**人に確認しない。設定に従う。**
 
-1. `orch-issue-memo` を手で呼び、理解メモの長さと粒度が安定するまでここで止める
-2. `orch init` → `orch sync` で状態の自動遷移を入れる
-3. `orch next` の1画面を使い始める
-4. `orch-implement` とPRテンプレート
-5. `orch merge-train`
+```bash
+node "$ORCH" phase --human
+```
+
+`phase` が届いていなければ `orch next --mode build` は空を返し、`orch worker` と
+`orch merge-train` は何もしない。止まったら「段が足りない」と一言伝えるだけでよく、
+段を上げるか聞かない。上げるのは人間が設定を書き換えるとき。
+
+段階的に入れる手順は `references/rollout.md`。
 
 定期実行したくなったら、Claude Desktop のスケジュールタスクか launchd から `claude -p "/orch-tick"` を呼ぶ。
 スケジューラは任意で、無くてもスキルを手で呼べば同じ動作になる。

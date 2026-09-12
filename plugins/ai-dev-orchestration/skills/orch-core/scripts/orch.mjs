@@ -5,7 +5,8 @@
 // 判定（状態遷移・WIP・並び順・マージ可否・lint）はすべてここで完結し、AI は再計算しない。
 //
 //   orch init
-//   orch profile [--human]                  今のプロファイル（プラン別のモデルと並行度）
+//   orch profile [--human]                  今のプロファイル（モデルの組み合わせ）
+//   orch phase [--human]                    今の段（どこまで自動でやるか）
 //   orch sync [--dry-run] [--rebuild]
 //   orch queue [--human]
 //   orch next [--mode memo|build] [--minutes N] [--project org/repo] [--human]
@@ -205,6 +206,42 @@ async function main() {
         return emit({ command: "review status", ...result });
       }
       return fail("review の後に run / record / status を指定してください");
+    }
+
+    case "phase": {
+      // 今どの段か。人に確認せず、この値に従う。
+      const PHASES = [
+        { n: 1, label: "理解メモを手で試す", enforced: false },
+        { n: 2, label: "状態の自動遷移（sync）", enforced: false },
+        { n: 3, label: "next の1画面", enforced: false },
+        { n: 4, label: "実装（worker / next --mode build）", enforced: true },
+        { n: 5, label: "マージ（merge-train）", enforced: true },
+      ];
+      const current = config.phase ?? 5;
+      return emit(
+        {
+          command: "phase",
+          phase: current,
+          canImplement: current >= 4,
+          canMerge: current >= 5,
+          phases: PHASES,
+        },
+        {
+          human,
+          render: (b) =>
+            [
+              ` 段: ${b.phase}`,
+              "",
+              ...b.phases.map(
+                (x) =>
+                  `   ${x.n === b.phase ? "▶" : " "} ${x.n} ${x.label}` +
+                  (x.enforced ? (b.phase >= x.n ? "  有効" : "  停止中") : ""),
+              ),
+              "",
+              " 変えるには orch.config.json の phase を書き換える",
+            ].join("\n"),
+        },
+      );
     }
 
     case "profile": {

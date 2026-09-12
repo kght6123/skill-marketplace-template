@@ -22,6 +22,12 @@ export const DEFAULT_CONFIG = {
 
   // マネージャのモデル。設定では変えられないので、起動時の指定に使う目安
   manager: { model: "default" },
+
+  // 段階的に導入するための段。AIはこれを人に確認しない。設定に従うだけ。
+  //   1 理解メモを手で試す / 2 状態の自動遷移 / 3 next の1画面
+  //   4 実装（orch worker・next --mode build）/ 5 マージ（orch merge-train）
+  // スクリプトが実際に止めるのは 4 と 5。1〜3 は運用の目安。
+  phase: 5,
   // 監視対象リポジトリ。"org/repo" か { name, path } で書く。
   // path はローカルのチェックアウト。ワーカーを起動するのに要る（AIはcloneしない）。
   repos: [],

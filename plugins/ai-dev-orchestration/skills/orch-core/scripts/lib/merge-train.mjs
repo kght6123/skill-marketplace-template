@@ -59,6 +59,9 @@ export function evaluate(entry, pr) {
 }
 
 export function mergeTrain(config, { dryRun = false } = {}) {
+  if ((config.phase ?? 5) < 5) {
+    return { results: [], blocked: "phase", phase: config.phase, dryRun };
+  }
   const state = loadState();
   const results = [];
   for (const entry of Object.values(state.issues)) {

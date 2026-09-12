@@ -115,6 +115,10 @@ const BUILD_ACTIONS = ["implement", "implement-continue", "apply-triage"];
 // mode: "memo"（tick）/ "build"（build）
 export function selectWork(state, config, mode, limit) {
   const report = queueReport(state, config);
+  // 段が届いていなければ、実装は選ばない（人に聞かずに設定で決める）
+  if (mode === "build" && (config.phase ?? 5) < 4) {
+    return { queue: report, items: [], blocked: "phase", phase: config.phase };
+  }
   const allowed = mode === "build" ? BUILD_ACTIONS : MEMO_ACTIONS;
   const max = limit || (mode === "build" ? config.limits.implementPerBuild : config.limits.memoPerTick);
 

@@ -113,6 +113,19 @@ check("重要パスは人間に回す", conflict.human.map((h) => h.file), ["src
 check("ロックファイルは再生成", conflict.auto.map((a) => a.file), ["pnpm-lock.yaml"]);
 check("needs_human を立てる", conflict.needs_human, true);
 
+// --- 段（phase による停止）-------------------------------------------
+resetState({ phase: 1 });
+check("phase 1 では実装を選ばない", json(["next", "--mode", "build"]).blocked, "phase");
+check("phase 1 では merge-train が何もしない", json(["merge-train"]).blocked, "phase");
+check("phase の一覧を出す", [json(["phase"]).phase, json(["phase"]).canImplement], [1, false]);
+resetState({ phase: 4 });
+check("phase 4 で実装が有効になる", json(["phase"]).canImplement, true);
+check("phase 4 ではマージはまだ止まる", json(["merge-train"]).blocked, "phase");
+resetState({ phase: 5 });
+check("phase 5 でマージが有効になる", json(["phase"]).canMerge, true);
+resetState();
+check("既定は全部有効", json(["phase"]).phase, 5);
+
 // --- プロファイル（モデルの組み合わせ）--------------------------------
 resetState({ profile: "sonnet" });
 const sonnet = json(["profile"]);
