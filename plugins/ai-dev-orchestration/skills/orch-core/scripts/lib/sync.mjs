@@ -10,7 +10,7 @@
 import { ghJson, fetchReactions } from "./gh.mjs";
 import { repoNames } from "./config.mjs";
 import { loadState, updateState, newEntry, setStatus, parseKey } from "./state.mjs";
-import { ownStamps, rocketIsValid, redoStamp, allQuestionsAnswered } from "./stamps.mjs";
+import { ownStamps, approveIsValid, isParked, redoStamp, emojiFor, parkName, approveName, allQuestionsAnswered } from "./stamps.mjs";
 import { sizeOf } from "./next.mjs";
 
 const MARKERS = {
@@ -99,22 +99,24 @@ export function collectFacts(config, snapshot) {
 
 // ---------------------------------------------------------------- 2. 適用
 
-// Issue本文のスタンプ。🚀が起点、👀で後回し。parked からの復帰もここ。
+// Issue本文のスタンプ。承認スタンプが起点、後回しスタンプで parked。復帰もここ。
 function applyBodyStamps(entry, config, f, transitions) {
   if (!["candidate", "parked"].includes(entry.status)) return;
   const stamps = ownStamps(f.issueReactions, config.account);
-  if (stamps["👀"]) {
+  const park = emojiFor(parkName(config));
+  const approve = emojiFor(approveName(config));
+  if (isParked(stamps, config)) {
     if (entry.status !== "parked") {
-      transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: "👀" });
+      transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: park });
       setStatus(entry, "parked");
     }
     return;
   }
-  if (rocketIsValid(stamps, f.issue?.updatedAt)) {
-    // 👀 が外れて🚀が有効なら、parked からでも動き出す
+  if (approveIsValid(stamps, f.issue?.updatedAt, config)) {
+    // 後回しが外れて承認が有効なら、parked からでも動き出す
     transitions.push({
       key: entry.key, from: entry.status, to: "sizing",
-      reason: entry.status === "parked" ? "👀が外れて🚀" : "本文に🚀",
+      reason: entry.status === "parked" ? `${park}が外れて${approve}` : `本文に${approve}`,
     });
     setStatus(entry, "sizing", { approvedBy: "body" });
   }
@@ -125,19 +127,20 @@ function applyCommentStamps(entry, config, f, transitions) {
   if (f.comment || f.commentReactions) {
     const c = f.comment;
     const stamps = ownStamps(f.commentReactions, config.account);
-    const redo = redoStamp(stamps);
+    const redo = redoStamp(stamps, config);
+    const approve = emojiFor(approveName(config));
 
-    if (stamps["👀"] && entry.status !== "parked") {
-      transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: "👀" });
+    if (isParked(stamps, config) && entry.status !== "parked") {
+      transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: emojiFor(parkName(config)) });
       setStatus(entry, "parked");
       return;
     }
     if (redo) entry.redo = redo; // 作り直しは next の workAction が拾う
 
     if (entry.status === "memo-review" && !redo) {
-      // 🚀は「コメント更新より後」かつ「確認事項がすべてチェック済み」のときだけ有効
-      if (rocketIsValid(stamps, c?.updated_at) && allQuestionsAnswered(c?.body || "")) {
-        transitions.push({ key: entry.key, from: entry.status, to: "ready", reason: "メモに🚀" });
+      // 承認は「コメント更新より後」かつ「確認事項がすべてチェック済み」のときだけ有効
+      if (approveIsValid(stamps, c?.updated_at, config) && allQuestionsAnswered(c?.body || "")) {
+        transitions.push({ key: entry.key, from: entry.status, to: "ready", reason: `メモに${approve}` });
         setStatus(entry, "ready", { redo: null });
       }
     }
@@ -145,8 +148,8 @@ function applyCommentStamps(entry, config, f, transitions) {
       entry.answersReady = true;
     }
     if (entry.status === "split-review" && !redo) {
-      if (rocketIsValid(stamps, c?.updated_at)) {
-        transitions.push({ key: entry.key, from: entry.status, to: "split-done", reason: "分割案に🚀" });
+      if (approveIsValid(stamps, c?.updated_at, config)) {
+        transitions.push({ key: entry.key, from: entry.status, to: "split-done", reason: `分割案に${approve}` });
         setStatus(entry, "split-done", { redo: null, childrenCreated: false });
       }
     }
@@ -168,11 +171,11 @@ function applyCommentStamps(entry, config, f, transitions) {
     if (!pf) continue;
     if (pf.approval) {
       const stamps = ownStamps(pf.approval.reactions, config.account);
-      if (rocketIsValid(stamps, pf.approval.comment?.updated_at)) pr.selfApproved = true;
+      if (approveIsValid(stamps, pf.approval.comment?.updated_at, config)) pr.selfApproved = true;
     }
     if (pf.triage) {
       const stamps = ownStamps(pf.triage.reactions, config.account);
-      if (rocketIsValid(stamps, pf.triage.comment?.updated_at)) pr.triageApproved = true;
+      if (approveIsValid(stamps, pf.triage.comment?.updated_at, config)) pr.triageApproved = true;
     }
   }
 }
@@ -232,7 +235,7 @@ export function applyFacts(state, config, facts) {
     const entry = state.issues[key];
     if (!entry || entry.status === "done") continue;
     applyBodyStamps(entry, config, f, transitions);
-    // 👀 が付いたままなら、ここで終わり。外れていれば上で sizing に戻っている
+    // 後回しが付いたままなら、ここで終わり。外れていれば上で sizing に戻っている
     if (entry.status === "parked") continue;
     applyCommentStamps(entry, config, f, transitions);
     refreshPrs(entry, f, transitions);

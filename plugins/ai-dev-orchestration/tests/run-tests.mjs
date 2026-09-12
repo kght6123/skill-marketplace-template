@@ -414,7 +414,7 @@ const outdated = json(["merge-train"], { env: withGh({
 check("未解決スレッドが残っていればマージしない",
   outdated.results[0].reasons.some((r) => r.includes("未解決")), true);
 
-// 3. parked は 👀 が外れれば復帰する
+// 3. parked は後回しスタンプが外れれば復帰する
 resetState();
 run(["state", "set", "org/order-api#124", "--status", "parked"]);
 run(["sync"], { env: withGh({
@@ -422,22 +422,48 @@ run(["sync"], { env: withGh({
   issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
   issueReactions: [{ content: "rocket", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
 }) });
-check("👀 が外れて🚀があれば parked から戻る",
+check("後回しが外れて承認があれば parked から戻る",
   json(["state", "get", "org/order-api#124"]).entry.status, "sizing");
 
-// 👀 が残っていれば parked のまま
+// 後回しが残っていれば parked のまま
 resetState();
 run(["state", "set", "org/order-api#124", "--status", "parked"]);
 run(["sync"], { env: withGh({
   issueList: [],
   issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
   issueReactions: [
-    { content: "eyes", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } },
+    { content: "hooray", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } },
     { content: "rocket", created_at: "2026-09-12T02:00:00Z", user: { login: "kght6123" } },
   ],
 }) });
-check("👀 が残っていれば parked のまま",
+check("後回しが残っていれば parked のまま",
   json(["state", "get", "org/order-api#124"]).entry.status, "parked");
+
+// 割り当てを変えれば、そのリアクションで parked になる
+resetState({ stamps: { approve: "rocket", park: "eyes", redo: ["-1"] } });
+run(["state", "set", "org/order-api#124", "--status", "memo-review"]);
+run(["sync"], { env: withGh({
+  issueList: [],
+  comment: { id: 2345678902, body: "## 理解メモ", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [{ content: "eyes", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
+}) });
+check("割り当てを変えたスタンプで parked になる",
+  json(["state", "get", "org/order-api#124"]).entry.status, "parked");
+
+// 既定（🎉）では 👀 を押しても何も起きない
+resetState();
+run(["state", "set", "org/order-api#124", "--status", "memo-review"]);
+run(["sync"], { env: withGh({
+  issueList: [],
+  comment: { id: 2345678902, body: "## 理解メモ", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [{ content: "eyes", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
+}) });
+check("既定では 👀 は無視される（別用途で使える）",
+  json(["state", "get", "org/order-api#124"]).entry.status, "memo-review");
+
+const stampInfo = json(["stamps"]);
+check("スタンプの割り当てを出す", [stampInfo.approve.emoji, stampInfo.park.emoji], ["🚀", "🎉"]);
+check("フッタの文面を出す", stampInfo.footer, "🚀 着手OK ／ 🎉 後回し");
 
 // 4. sync はロックを持ったままGitHubを待たない
 resetState();

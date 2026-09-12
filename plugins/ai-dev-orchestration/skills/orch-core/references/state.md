@@ -46,7 +46,7 @@
 | implementing | 実装中 | |
 | pr-review | セルフ／レビュアー待ち | ✓ |
 | needs-human | 自動で進めない | ✓ |
-| parked | 👀 後回し | |
+| parked | 後回しスタンプ（既定🎉） | |
 | done | 完了 | |
 
 `candidate` だけは仕様の表に無い。並び順7を出すために追加した。
@@ -55,17 +55,18 @@
 
 | きっかけ | 遷移 |
 |---|---|
-| Issue本文に有効な🚀 | candidate → sizing |
+| Issue本文に有効な承認スタンプ | candidate → sizing |
+| 後回しが外れて承認スタンプ | parked → sizing |
 | 規模判定が小 → メモ投稿（確認事項あり） | sizing → waiting-answer |
 | 規模判定が小 → メモ投稿（確認事項なし） | sizing → memo-review |
 | 規模判定が大・深さ<3 → 分割案投稿 | sizing → split-review |
 | 規模判定が大・深さ3 | sizing → needs-human |
-| メモに有効な🚀（確認事項が全部チェック済み） | memo-review → ready |
-| 分割案に有効な🚀 | split-review → split-done |
+| メモに有効な承認スタンプ（確認事項が全部チェック済み） | memo-review → ready |
+| 分割案に有効な承認スタンプ | split-review → split-done |
 | 全Sub Issueがdone | split-done → done |
 | PR作成 | ready/implementing → pr-review |
 | 全PRがマージ済み | pr-review → done |
-| 👀 | any → parked |
+| 後回しスタンプ | any → parked |
 | レビューの block が maxRounds 超過 | any → needs-human |
 
 ## 書き込みのロック

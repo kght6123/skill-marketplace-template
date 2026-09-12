@@ -56,10 +56,17 @@ export function fetchReactions(nameWithOwner, kind, id) {
   return out || [];
 }
 
-export const REACTION_TO_STAMP = {
+// GitHub のリアクション名 → 表示用の絵文字。8種類すべて。
+// どれをどの意味に使うかは orch.config.json の stamps で決める。
+export const EMOJI = {
   rocket: "🚀",
+  hooray: "🎉",
   eyes: "👀",
+  "+1": "👍",
   "-1": "👎",
   laugh: "😄",
+  confused: "😕",
   heart: "❤️",
 };
+
+export const REACTIONS = Object.keys(EMOJI);

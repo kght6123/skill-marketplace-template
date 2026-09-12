@@ -3,6 +3,7 @@ orch — AI開発オーケストレーションの決定的な処理
   orch init                                        $ORCH_HOME を作り、設定の雛形を置く
   orch profile [--human]                           今のプロファイル（モデルの組み合わせ）
   orch phase [--human]                             今の段（どこまで自動でやるか）
+  orch stamps [--human]                            スタンプの割り当て
   orch sync [--dry-run] [--rebuild]                GitHub差分とスタンプを読み、状態を遷移させる
   orch queue [--human]                             行列の件数とWIP上限の空き
   orch next [--mode memo|build] [--minutes N]      次の1件（--mode はAI用、無指定は人間用）

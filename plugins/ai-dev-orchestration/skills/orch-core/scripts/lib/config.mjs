@@ -23,6 +23,15 @@ export const DEFAULT_CONFIG = {
   // マネージャのモデル。設定では変えられないので、起動時の指定に使う目安
   manager: { model: "default" },
 
+  // どのリアクションをどの意味に使うか。GitHub で普段使っている絵文字と
+  // ぶつかるなら、ここを変える。使えるのは GitHub の8種類:
+  //   rocket / hooray / eyes / +1 / -1 / laugh / confused / heart
+  stamps: {
+    approve: "rocket", // 承認・着手OK
+    park: "hooray",    // 後回し（parked）
+    redo: ["-1", "laugh", "heart"], // 作り直し
+  },
+
   // 段階的に導入するための段。AIはこれを人に確認しない。設定に従うだけ。
   //   1 理解メモを手で試す / 2 状態の自動遷移 / 3 next の1画面
   //   4 実装（orch worker・next --mode build）/ 5 マージ（orch merge-train）

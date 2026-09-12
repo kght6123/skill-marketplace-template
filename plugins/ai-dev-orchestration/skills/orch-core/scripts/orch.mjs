@@ -7,6 +7,7 @@
 //   orch init
 //   orch profile [--human]                  今のプロファイル（モデルの組み合わせ）
 //   orch phase [--human]                    今の段（どこまで自動でやるか）
+//   orch stamps [--human]                   どのリアクションをどの意味に使うか
 //   orch sync [--dry-run] [--rebuild]
 //   orch queue [--human]
 //   orch next [--mode memo|build] [--minutes N] [--project org/repo] [--human]
@@ -37,6 +38,7 @@ import { lintMemo, lintPr } from "./lib/lint.mjs";
 import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
 import { runWorker, parseEnvelope, applyEnvelope } from "./lib/worker.mjs";
+import { emojiFor, approveName, parkName, redoNames } from "./lib/stamps.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
 const command = positional[0];
@@ -179,7 +181,7 @@ async function main() {
       const result =
         kind === "pr"
           ? lintPr(text, { title: opts.title })
-          : lintMemo(text);
+          : lintMemo(text, { approveEmoji: emojiFor(approveName(config)) });
       const code = emit({ command: `lint ${kind}`, file, ...result }, { human, render: renderLint });
       // lint 違反は「作り直し」であって停止ではないので、専用の終了コード 2 を返す
       return result.ok ? code : EXIT_LINT;
@@ -206,6 +208,31 @@ async function main() {
         return emit({ command: "review status", ...result });
       }
       return fail("review の後に run / record / status を指定してください");
+    }
+
+    case "stamps": {
+      // どのリアクションをどの意味に使っているか。フッタの文面はこれに合わせる。
+      const redo = redoNames(config).map((n) => ({ name: n, emoji: emojiFor(n) }));
+      return emit(
+        {
+          command: "stamps",
+          approve: { name: approveName(config), emoji: emojiFor(approveName(config)) },
+          park: { name: parkName(config), emoji: emojiFor(parkName(config)) },
+          redo,
+          footer: `${emojiFor(approveName(config))} 着手OK ／ ${emojiFor(parkName(config))} 後回し`,
+        },
+        {
+          human,
+          render: (b) =>
+            [
+              ` 承認・着手OK  ${b.approve.emoji}  (${b.approve.name})`,
+              ` 後回し        ${b.park.emoji}  (${b.park.name})`,
+              ` 作り直し      ${b.redo.map((r) => `${r.emoji} (${r.name})`).join("  ")}`,
+              "",
+              ` フッタの文面: ${b.footer}`,
+            ].join("\n"),
+        },
+      );
     }
 
     case "phase": {

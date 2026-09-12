@@ -54,6 +54,7 @@ export function mermaidNodeCount(src) {
 
 export function lintMemo(text, limits = {}) {
   const max = { examples: 5, questions: 3, skeleton: 20, why: 3, ...limits };
+  const approve = limits.approveEmoji || "🚀";
   const f = [];
 
   if (!/<!--\s*ai-memo\s+v\d+\s*-->/.test(text)) {
@@ -109,8 +110,8 @@ export function lintMemo(text, limits = {}) {
     f.push(finding("block", "diagram", `図はここで1枚だけ（現在 ${diagrams.length} 枚）`));
   }
 
-  if (!/🚀/.test(text)) {
-    f.push(finding("block", "footer", "フッタのスタンプ案内（🚀 着手OK ／ 👀 後回し）が無い"));
+  if (!text.includes(approve)) {
+    f.push(finding("block", "footer", `フッタのスタンプ案内（${approve} 着手OK ／ 後回し）が無い`));
   }
 
   return summarize(f, { checkboxes, diagrams: diagrams.length });
