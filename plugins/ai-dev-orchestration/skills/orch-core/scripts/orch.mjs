@@ -234,7 +234,11 @@ async function main() {
               "",
               ` マネージャの起動: ${b.startManager}`,
               "",
-              ...b.profiles.map((p) => `   ${p.name.padEnd(8)} マネージャ ${p.managerModel} / ワーカー ${p.workerModel} / 並行 ${p.parallelWorkers}`),
+              ...b.profiles.map(
+                (p) =>
+                  `   ${p.name.padEnd(8)} マネージャ ${String(p.managerModel).padEnd(7)} ワーカー ${String(p.workerModel).padEnd(7)}` +
+                  (p.parallelWorkers ? ` 並行 ${p.parallelWorkers}` : ""),
+              ),
             ].join("\n"),
         },
       );

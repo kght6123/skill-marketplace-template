@@ -123,38 +123,43 @@ claude --model opus      # マネージャのセッション
 **別名（`opus` / `sonnet` / `haiku` / `default`）を推奨する。** 世代が上がっても追随するのと、
 `default` はプランで解決先が変わるため。
 
-### プランで切り替える
+### プロファイルで切り替える
 
-Claude Code の `default` は契約で解決先が変わる。
+プロファイル名は**マネージャのモデル**。ワーカーはその1段下を既定にしている。
 
-| プラン | `default` の解決先 |
-|---|---|
-| Max / Team Premium / Enterprise / API | Opus 5 |
-| Pro / Team Standard | Sonnet 5 |
-
-つまり Pro でマネージャに `opus` を固定すると、使用量をすぐ使い切る。並行ワーカーを12本も回せば
-なおさら。プランごとにプロファイルを切り替える。
+| プロファイル | マネージャ | ワーカー |
+|---|---|---|
+| `sonnet` | sonnet | sonnet |
+| `opus` | opus | sonnet |
+| `fable` | fable | opus |
 
 ```json
 {
-  "profile": "pro",
+  "profile": "opus",
   "profiles": {
-    "pro": { "manager": { "model": "default" }, "worker": { "model": "haiku" },
-             "limits": { "parallelWorkers": 2 } },
-    "max": { "manager": { "model": "opus" },     "worker": { "model": "sonnet" },
-             "limits": { "parallelWorkers": 12 } }
+    "sonnet": { "manager": { "model": "sonnet" }, "worker": { "model": "sonnet" } },
+    "opus":   { "manager": { "model": "opus" },   "worker": { "model": "sonnet" } },
+    "fable":  { "manager": { "model": "fable" },  "worker": { "model": "opus" } }
   }
 }
 ```
 
 ```bash
 node "$ORCH" profile --human              # 今のプロファイルとマネージャの起動コマンド
-node "$ORCH" worker --profile max ...     # コマンドごとに切り替え
-ORCH_PROFILE=max node "$ORCH" ...         # シェルごとに切り替え
+node "$ORCH" worker --profile opus ...    # コマンドごとに切り替え
+ORCH_PROFILE=opus node "$ORCH" ...        # シェルごとに切り替え
 ```
 
-プロファイルは設定全体に上書きで効くので、`wip` の上限もプランごとに変えられる。
-仕事とプライベートでマシンが分かれているなら、`orch.config.json` の `profile` に書いておけばよい。
+契約（Pro / Max）による自動判別はできない。使う側が選ぶ。`default` だけは例外で、
+Claude Code が契約を見て解決先を変える。
+
+| プラン | `default` の解決先 |
+|---|---|
+| Max / Team Premium / Enterprise / API | Opus 5 |
+| Pro / Team Standard | Sonnet 5 |
+
+Pro で `opus` を選べば使用量は早く減る。並行ワーカーが多いとなおさらなので、
+プロファイルに `limits` を足して並行度も一緒に落とすとよい。
 
 Codex CLI / Copilot CLI も `--model` を持つので、`modelFlag` を変えれば同じ形で渡せる。
 

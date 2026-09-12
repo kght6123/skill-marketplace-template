@@ -6,24 +6,24 @@
 > 仕様（ToDo#59）はYAMLで書かれているが、依存ゼロで動かすため既定はJSONにしている。
 > キー構成は仕様と1対1。`js-yaml` が解決できる環境なら `orch.config.yaml` も読む。
 
-## プロファイル（プラン別の切り替え）
+## プロファイル（モデルの組み合わせ）
 
-プランによってモデルと並行度を変える。`orch init` の雛形に `pro` と `max` が入っている。
+プロファイル名は**マネージャのモデル**。ワーカーはその1段下を既定にしている。
+プランによる自動判別はできないので、明示的に選ぶ。
+
+| プロファイル | マネージャ | ワーカー |
+|---|---|---|
+| `sonnet` | sonnet | sonnet |
+| `opus` | opus | sonnet |
+| `fable` | fable | opus |
 
 ```json
 {
-  "profile": "pro",
+  "profile": "opus",
   "profiles": {
-    "pro": {
-      "manager": { "model": "default" },
-      "worker": { "model": "haiku" },
-      "limits": { "parallelWorkers": 2 }
-    },
-    "max": {
-      "manager": { "model": "opus" },
-      "worker": { "model": "sonnet" },
-      "limits": { "parallelWorkers": 12 }
-    }
+    "sonnet": { "manager": { "model": "sonnet" }, "worker": { "model": "sonnet" } },
+    "opus":   { "manager": { "model": "opus" },   "worker": { "model": "sonnet" } },
+    "fable":  { "manager": { "model": "fable" },  "worker": { "model": "opus" } }
   }
 }
 ```
@@ -31,13 +31,14 @@
 切り替えは3通り。上から優先される。
 
 ```bash
-node "$ORCH" worker --profile max ...   # コマンドごと
-ORCH_PROFILE=max node "$ORCH" ...       # シェルごと
-# orch.config.json の "profile" キー      # 既定
-node "$ORCH" profile --human            # 今どれで動いているか
+node "$ORCH" worker --profile opus ...   # コマンドごと
+ORCH_PROFILE=opus node "$ORCH" ...       # シェルごと
+# orch.config.json の "profile" キー       # 既定
+node "$ORCH" profile --human             # 今どれで動いているか
 ```
 
-プロファイルは設定全体に上書きで効くので、`wip` や `review` もプランごとに変えられる。
+プロファイルは設定全体に上書きで効くので、`limits.parallelWorkers` や `wip` を足せば
+モデルごとに並行度も変えられる。既定のプロファイルはモデルだけを指定している。
 
 ---
 
@@ -104,7 +105,7 @@ node "$ORCH" profile --human            # 今どれで動いているか
 
 | キー | 効果 |
 |---|---|
-| `profile` / `profiles` | プラン別の上書き。`ORCH_PROFILE` と `--profile` が優先 |
+| `profile` / `profiles` | 設定の上書き。名前はマネージャのモデル。`ORCH_PROFILE` と `--profile` が優先 |
 | `manager.model` | マネージャの起動に使うモデルの目安。`orch profile` が起動コマンドを出す |
 | `account` | スタンプの押し主判定。**必須** |
 | `repos` | 監視対象。**必須**。`"org/repo"` でも `{ name, path }` でも書ける |

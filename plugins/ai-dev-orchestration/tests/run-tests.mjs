@@ -113,15 +113,19 @@ check("重要パスは人間に回す", conflict.human.map((h) => h.file), ["src
 check("ロックファイルは再生成", conflict.auto.map((a) => a.file), ["pnpm-lock.yaml"]);
 check("needs_human を立てる", conflict.needs_human, true);
 
-// --- プロファイル（プラン別の切り替え）--------------------------------
-resetState({ profile: "pro" });
-const pro = json(["profile"]);
-check("設定の profile が効く", [pro.active, pro.workerModel, pro.parallelWorkers], ["pro", "haiku", 2]);
-check("マネージャの起動コマンドを出す", pro.startManager, "claude --model default");
-const max = json(["profile", "--profile", "max"]);
-check("--profile が設定より優先される", [max.active, max.workerModel, max.parallelWorkers], ["max", "sonnet", 12]);
+// --- プロファイル（モデルの組み合わせ）--------------------------------
+resetState({ profile: "sonnet" });
+const sonnet = json(["profile"]);
+check("設定の profile が効く", [sonnet.active, sonnet.managerModel, sonnet.workerModel],
+  ["sonnet", "sonnet", "sonnet"]);
+check("マネージャの起動コマンドを出す", sonnet.startManager, "claude --model sonnet");
+const opus = json(["profile", "--profile", "opus"]);
+check("--profile が設定より優先される", [opus.active, opus.managerModel, opus.workerModel],
+  ["opus", "opus", "sonnet"]);
+const fable = json(["profile", "--profile", "fable"]);
+check("fable はワーカーが opus", [fable.managerModel, fable.workerModel], ["fable", "opus"]);
 check("ORCH_PROFILE でも切り替わる",
-  json(["profile"], { env: { ORCH_PROFILE: "max" } }).workerModel, "sonnet");
+  json(["profile"], { env: { ORCH_PROFILE: "opus" } }).managerModel, "opus");
 check("知らないプロファイルは止まる",
   json(["profile", "--profile", "team"], { expectExit: 1 }).ok, false);
 

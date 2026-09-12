@@ -12,21 +12,12 @@ export const DEFAULT_CONFIG = {
   account: null,
 
   // 使うプロファイル。ORCH_PROFILE か --profile が優先。
-  // プランによってモデルと並行度を変えるための仕組み。
+  // 名前はマネージャのモデル。プランで自動判別はできないので、明示的に選ぶ。
   profile: null,
   profiles: {
-    pro: {
-      // Pro は default が Sonnet 5。Opus は使用量を食うので並行度も落とす
-      manager: { model: "default" },
-      worker: { model: "haiku" },
-      limits: { parallelWorkers: 2 },
-    },
-    max: {
-      // Max は default が Opus 5
-      manager: { model: "opus" },
-      worker: { model: "sonnet" },
-      limits: { parallelWorkers: 12 },
-    },
+    sonnet: { manager: { model: "sonnet" }, worker: { model: "sonnet" } },
+    opus: { manager: { model: "opus" }, worker: { model: "sonnet" } },
+    fable: { manager: { model: "fable" }, worker: { model: "opus" } },
   },
 
   // マネージャのモデル。設定では変えられないので、起動時の指定に使う目安

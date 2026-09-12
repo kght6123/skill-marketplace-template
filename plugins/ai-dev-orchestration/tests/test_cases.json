@@ -133,20 +133,19 @@
     "prompt": "3つのIssueを同時に実装させて",
     "checks": [
       "limits.parallelWorkers の上限を確認している",
-      "ワーカーのモデルは worker.model で指定できると理解している",
+      "ワーカーのモデルは worker.model かプロファイルで指定できると理解している",
       "同じIssueに2本起動する場合は worktree が連番で分かれることを把握している",
       "state.json への書き込みをワーカーにさせていない",
       "先に orch queue で人間の行列の空きを確認している"
     ]
   },
   {
-    "id": "test-14-plan-profile",
-    "prompt": "今日は個人のPro契約の方で回したい。モデル落として",
+    "id": "test-14-profile",
+    "prompt": "今日は軽く回したいので sonnet で。マネージャもワーカーも",
     "checks": [
       "orch profile でプロファイルを確認・切り替えている",
       "設定を手で書き換えず --profile か ORCH_PROFILE を使っている",
-      "Pro では default が Sonnet 5 に解決されることを踏まえている",
-      "並行ワーカー数も落としている",
+      "プロファイル名がマネージャのモデルを指すと理解している",
       "マネージャのモデルは起動時に指定するものだと説明している"
     ]
   }
