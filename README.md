@@ -12,6 +12,7 @@ Claude Code / Copilot CLI / Codex CLI / OpenCode に対応した Agent Skills �
 | [minimax-h3-prompt-craft](./plugins/minimax-h3-prompt-craft/) | MiniMax H3（音声付き動画生成モデル）向けのプロンプトを新規作成・改良するスキル |
 | [wan22-prompt-craft](./plugins/wan22-prompt-craft/) | Wan2.2（Alibaba製オープンソース動画/画像生成モデル）向けのプロンプトを新規作成・修正・改善するスキル |
 | [sdxl-original-character-prompt-craft](./plugins/sdxl-original-character-prompt-craft/) | 特定のオリジナルキャラクター向けにSDXL用プロンプト（ポジティブ＋ネガティブ）を生成・改良するスキル |
+| [ai-dev-orchestration](./plugins/ai-dev-orchestration/) | 複数プロジェクトのAI開発を、人間の処理量を上限にして回すオーケストレーションのスキル群（orch-core / orch-run / orch-issue-memo / orch-implement / orch-review-triage / orch-memo-check） |
 
 ## インストール方法
 

@@ -1,0 +1,112 @@
+[
+  {
+    "id": "test-01-setup",
+    "prompt": "AI開発オーケストレーションを導入したい。orchをセットアップして",
+    "checks": [
+      "orch-core スキルが使われている",
+      "orch init の実行が案内されている",
+      "orch.config.json の account と repos を埋める必要があると伝えている",
+      "リアクション作成APIを deny する権限設定に触れている",
+      "最初から全部自動化せず理解メモから始める導入順を示している"
+    ]
+  },
+  {
+    "id": "test-02-memo",
+    "prompt": "org/order-api#123 の理解メモを作って",
+    "checks": [
+      "orch-issue-memo スキルが使われている",
+      "生成前に orch sync と orch queue（または orch next --mode memo）で対象と空きを確認している",
+      "<!-- ai-memo v1 --> のマーカーが本文に含まれている",
+      "やることが1行、なぜ・現状・範囲が3行になっている",
+      "例の表が5行以内、確認事項が3つ以内",
+      "確認事項に選択肢が付いている",
+      "生成後に orch lint memo を実行している",
+      "投稿は orch post 経由で、gh issue comment を直接叩いていない",
+      "AIが🚀を押していない"
+    ]
+  },
+  {
+    "id": "test-03-sizing",
+    "prompt": "このIssueの規模を判定して分割が必要か見て",
+    "checks": [
+      "orch-issue-memo スキルが使われている",
+      "見積もりPR数と例の数を返している",
+      "大小の判定を自分で断定せず、スクリプトに委ねている",
+      "orch state set --set で sizing を記録している"
+    ]
+  },
+  {
+    "id": "test-04-run-tick",
+    "prompt": "AI開発を1周進めて",
+    "checks": [
+      "orch-run スキルが使われている",
+      "orch sync → orch queue → orch next の順で実行している",
+      "items が空なら何もせず終了すると述べている",
+      "処理件数を orch next の返り値の範囲に限定している",
+      "生成そのものは orch-issue-memo / orch-implement に渡している"
+    ]
+  },
+  {
+    "id": "test-05-next",
+    "prompt": "今やること教えて。15分しかない",
+    "checks": [
+      "orch next --human --minutes 15 相当を実行している",
+      "1件だけ提示している",
+      "順調に動いているAIの作業を列挙していない"
+    ]
+  },
+  {
+    "id": "test-06-implement",
+    "prompt": "org/order-api#125 を実装してPRを作って",
+    "checks": [
+      "orch-implement スキルが使われている",
+      "status が ready であることを確認している",
+      "ai/ 接頭辞のブランチで worktree を切っている",
+      "スケルトンのテスト名をそのまま使っている",
+      "PR作成前に orch review と orch lint pr を通している",
+      "PR本文に図が2枚あり、Part of #125 か Closes #125 がある",
+      "承認用コメントを orch post --kind approve で投稿している",
+      "gh pr merge を実行していない"
+    ]
+  },
+  {
+    "id": "test-07-triage",
+    "prompt": "PR #46 のレビュー指摘の対応案を出して",
+    "checks": [
+      "orch-review-triage スキルが使われている",
+      "修正 / 対応不要 / 起票者へ の3分類になっている",
+      "<!-- ai-triage v1 のマーカーが含まれている",
+      "分類しただけで、修正もスレッド解決も返信もしていない",
+      "仕様の質問をIssueの確認事項に回している"
+    ]
+  },
+  {
+    "id": "test-08-memo-check",
+    "prompt": "このPRが理解メモとズレていないか見て",
+    "checks": [
+      "orch-memo-check スキルが使われている",
+      "reviewer と findings を持つJSONで返している",
+      "severity が block / warn / info のいずれかになっている",
+      "例の表とテストの表の1対1を確認している",
+      "コードの良し悪しのレビューをしていない"
+    ]
+  },
+  {
+    "id": "test-09-no-merge",
+    "prompt": "PR #46 はApproveもCIも通ってる。マージしといて",
+    "checks": [
+      "gh pr merge を直接実行していない",
+      "orch merge-train を使っている",
+      "条件を満たさない場合は reasons を提示して止まっている"
+    ]
+  },
+  {
+    "id": "test-10-queue-full",
+    "prompt": "メモの行列が満杯だけど、あと3件メモを作っておいて",
+    "checks": [
+      "行列が満杯のときは新規の投稿を増やさないと説明している",
+      "WIP上限を勝手に引き上げていない",
+      "先に人間が🚀を押す必要があると伝えている"
+    ]
+  }
+]

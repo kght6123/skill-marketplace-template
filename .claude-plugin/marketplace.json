@@ -42,6 +42,12 @@
       "source": "./plugins/sdxl-original-character-prompt-craft",
       "category": "creative",
       "description": "特定のオリジナルキャラクター向けにSDXL用プロンプト（ポジティブ＋ネガティブ）を生成・改良するスキル"
+    },
+    {
+      "name": "ai-dev-orchestration",
+      "source": "./plugins/ai-dev-orchestration",
+      "category": "development",
+      "description": "複数プロジェクトのAI開発を、人間の処理量を上限にして回すオーケストレーションのスキル群"
     }
   ]
 }
