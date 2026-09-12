@@ -11,15 +11,17 @@ import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { repoConfig, worktreeRoot } from "./config.mjs";
-import { loadState, updateState, setStatus, parseKey, STATUSES } from "./state.mjs";
+import { loadState, updateState, setStatus, parseKey, STATUSES, processIsAlive } from "./state.mjs";
 import { validateResult } from "./review.mjs";
 import { post } from "./post.mjs";
+import { lintPr } from "./lint.mjs";
+import { ghJson, gh, isDryRun } from "./gh.mjs";
 
 const START = "<<<ORCH_RESULT>>>";
 const END = "<<<END>>>";
 
 // ワーカーが返してよいのは「観測した事実」だけ。状態遷移の判定はマネージャの担当。
-const ENVELOPE_FIELDS = ["key", "action", "status", "prs", "review", "comments", "needs_human", "notes"];
+const ENVELOPE_FIELDS = ["key", "action", "status", "prs", "pullRequest", "review", "comments", "needs_human", "notes"];
 
 // PRについて報告してよい項目。merged / selfApproved / approvalCommentId などの
 // 承認とマージに関わる項目はマネージャ管轄で、ワーカーからは書かせない。
@@ -56,10 +58,25 @@ function slotPaths(config, key, slot) {
   };
 }
 
-// そのworktreeで今ワーカーが動いているか。落ちたプロセスのロックは時間で無効にする。
+function lockOwner(dir) {
+  try {
+    return JSON.parse(fs.readFileSync(lockPathFor(dir), "utf8"));
+  } catch {
+    return null; // 旧形式・壊れている・直前に外れた
+  }
+}
+
+// そのworktreeで今ワーカーが動いているか。
+//
+// 時間だけで判断すると、正常に長く動いているワーカーのロックを奪える。
+// 同じホストなら PID の生死で判断し、時間は分からないときの保険にする。
 function isBusy(dir, staleMs) {
   const lock = lockPathFor(dir);
   if (!fs.existsSync(lock)) return false;
+  const owner = lockOwner(dir);
+  if (owner?.hostname === os.hostname() && owner.pid) {
+    return processIsAlive(owner.pid); // 生きていれば何時間でも busy
+  }
   try {
     return Date.now() - fs.statSync(lock).mtimeMs < staleMs;
   } catch {
@@ -72,7 +89,11 @@ function isBusy(dir, staleMs) {
 function claimSlot(dir, staleMs) {
   const lock = lockPathFor(dir);
   fs.mkdirSync(path.dirname(dir), { recursive: true });
-  const body = JSON.stringify({ pid: process.pid, at: new Date().toISOString() });
+  const body = JSON.stringify({
+    pid: process.pid,
+    hostname: os.hostname(),
+    at: new Date().toISOString(),
+  });
   try {
     fs.writeFileSync(lock, body, { flag: "wx" }); // 既にあれば EEXIST
     return true;
@@ -137,7 +158,26 @@ export function ensureWorktree(config, key, { lock = false } = {}) {
     }
 
     const worktreeExists = fs.existsSync(path.join(dir, ".git"));
-    if (!worktreeExists) {
+    if (worktreeExists) {
+      // 使い回す枠。前回の残骸が混ざらないように戻してから渡す
+      const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+      const dirty = execFileSync("git", ["-C", dir, "status", "--porcelain"], git).trim();
+      if (dirty) {
+        execFileSync("git", ["-C", dir, "reset", "--hard"], git);
+        execFileSync("git", ["-C", dir, "clean", "-fd"], git);
+      }
+      const current = execFileSync("git", ["-C", dir, "branch", "--show-current"], git).trim();
+      if (current !== branch) {
+        try {
+          execFileSync("git", ["-C", dir, "checkout", branch], git);
+        } catch (err) {
+          if (lock) releaseWorktree(dir);
+          throw new Error(`${dir} を ${branch} に戻せません: ${String(err.stderr || err.message)}`);
+        }
+      }
+      return { dir, branch, slot, repoPath, reused: true, cleaned: Boolean(dirty) };
+    }
+    {
       fs.mkdirSync(path.dirname(dir), { recursive: true });
       const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
       const exists = execFileSync("git", ["-C", repoPath, "branch", "--list", branch], git).trim();
@@ -156,7 +196,7 @@ export function ensureWorktree(config, key, { lock = false } = {}) {
         throw err;
       }
     }
-    return { dir, branch, slot, repoPath };
+    return { dir, branch, slot, repoPath, reused: false, cleaned: false };
   }
   throw new Error(
     `${key} の worktree が ${maxSlots} 枠すべて使用中です（実行中か、別の場所で checked out）。limits.parallelWorkers を見てください`,
@@ -212,11 +252,23 @@ export function parseEnvelope(text, { key, action } = {}) {
     if (!check.ok) errors.push(`review[${i}]: ${check.errors.join(" / ")}`);
   }
 
+  // PR もワーカーは作らない。作ってほしい内容を返し、マネージャが作る
+  const wantsPr = data.pullRequest;
+  if (wantsPr) {
+    for (const field of ["title", "head"]) {
+      if (typeof wantsPr[field] !== "string" || !wantsPr[field]) {
+        errors.push(`pullRequest.${field} が無い`);
+      }
+    }
+    if (!wantsPr.body && !wantsPr.bodyFile) errors.push("pullRequest に body も bodyFile も無い");
+  }
+
   // ワーカーは投稿できないので、投稿してほしいコメントはここに載せる
   for (const [i, c] of (data.comments || []).entries()) {
     if (!COMMENT_KINDS.includes(c.kind)) errors.push(`comments[${i}].kind が不正: ${c.kind}`);
     if (!c.body && !c.bodyFile) errors.push(`comments[${i}] に body も bodyFile も無い`);
-    if (["approve", "triage"].includes(c.kind) && typeof c.pr !== "number") {
+    // 新しく作るPR宛てなら番号は省ける（マネージャが差し替える）
+    if (["approve", "triage"].includes(c.kind) && typeof c.pr !== "number" && !wantsPr) {
       errors.push(`comments[${i}] に pr（番号）が無い`);
     }
   }
@@ -319,12 +371,29 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
       // stdin は閉じる。開いたままだと EOF を待って止まるCLIがある（codex exec など）
       stdio: viaStdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
       input: viaStdin ? prompt : undefined,
-      env: { ...process.env, ORCH_ROLE: "worker", ORCH_KEY: key, ORCH_ACTION: action },
+      env: {
+        ...process.env,
+        ORCH_ROLE: "worker",
+        ORCH_KEY: key,
+        ORCH_ACTION: action,
+        ORCH_BRANCH: branch,
+      },
     });
   } finally {
     releaseWorktree(dir); // 連番の枠を空ける
   }
   if (res.error) throw new Error(`ワーカーを起動できません: ${res.error.message}`);
+
+  // 終了コードが 0 でなければ、エンベロープが揃っていても採用しない。
+  // 出力の後で後処理やフックが落ちた可能性があり、部分的な stdout は信用できない。
+  if (res.status !== 0) {
+    return {
+      ok: false, key, action, cwd: dir, slot, exitCode: res.status,
+      errors: [`ワーカーが終了コード ${res.status} で終了した`],
+      needs_human: true,
+      stderr: (res.stderr || "").slice(-2000),
+    };
+  }
 
   // ワーカーは信用しない実行主体。key・status・書ける項目をすべて突き合わせる。
   const envelope = parseEnvelope(res.stdout || "", { key, action });
@@ -341,29 +410,76 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
       stderr: (res.stderr || "").slice(-2000),
     };
   }
-  const applied = applyEnvelope(envelope.data, { action });
-  // ワーカーは投稿できない。返ってきた本文はマネージャが投稿する。
-  const posted = postEnvelopeComments(envelope.data);
-  return {
-    ok: true, key, action, cwd: dir, branch, slot,
-    exitCode: res.status, applied, posted, envelope: envelope.data,
-  };
+  return finishEnvelope(envelope.data, {
+    action,
+    extra: { key, action, cwd: dir, branch, slot, exitCode: res.status },
+  });
+}
+
+// エンベロープを state・GitHub に反映する。マネージャ側だけが呼ぶ。
+//   1. PR を作る（lint を通してから）
+//   2. state に反映する
+//   3. コメントを投稿する（新しいPR宛ては番号を差し替える）
+export function finishEnvelope(data, { action, extra = {} } = {}) {
+  const created = createPullRequest(data);
+  const withPr = created
+    ? { ...data, prs: [...(data.prs || []), { number: created.number, branch: data.pullRequest.head }] }
+    : data;
+  const applied = applyEnvelope(withPr, { action });
+  const posted = postEnvelopeComments(data, { newPrNumber: created?.number ?? null });
+  return { ok: true, ...extra, createdPr: created, applied, posted, envelope: data };
+}
+
+// 本文をファイルに落とす（インラインで来た場合）
+function bodyToFile(entryBody, entryFile, tag) {
+  if (entryFile) return { file: entryFile, temp: null };
+  const temp = path.join(os.tmpdir(), `orch-${tag}-${process.pid}-${Date.now()}.md`);
+  fs.writeFileSync(temp, entryBody);
+  return { file: temp, temp };
+}
+
+// PR はマネージャが作る。作る前に PR本文の lint を通す。
+// ワーカー側で作らせると、テンプレートの上限をすり抜けられる。
+export function createPullRequest(data) {
+  const want = data.pullRequest;
+  if (!want) return null;
+  const { nameWithOwner } = parseKey(data.key);
+  const { file, temp } = bodyToFile(want.body, want.bodyFile, "pr-body");
+  try {
+    const checked = lintPr(fs.readFileSync(file, "utf8"), { title: want.title });
+    if (!checked.ok) {
+      const blocking = checked.findings.filter((f) => f.severity === "block");
+      throw new Error(
+        `PR本文が lint を通らない: ${blocking.map((f) => `${f.rule} ${f.message}`).join(" / ")}`,
+      );
+    }
+    if (isDryRun()) return { number: 0, dryRun: true };
+    const args = [
+      "pr", "create", "--repo", nameWithOwner,
+      "--head", want.head, "--title", want.title, "--body-file", file,
+    ];
+    if (want.base) args.push("--base", want.base);
+    if (want.draft) args.push("--draft");
+    const out = gh(args) || "";
+    const number = Number((out.trim().match(/\/pull\/(\d+)/) || [])[1]);
+    if (!Number.isFinite(number) || number <= 0) {
+      throw new Error(`PRの番号を読み取れない: ${out.trim().slice(0, 200)}`);
+    }
+    return { number, url: out.trim() };
+  } finally {
+    if (temp) fs.rmSync(temp, { force: true });
+  }
 }
 
 // エンベロープの comments を投稿し、commentId を state に記録する
-export function postEnvelopeComments(data) {
+export function postEnvelopeComments(data, { newPrNumber = null } = {}) {
   const posted = [];
   for (const c of data.comments || []) {
-    let bodyFile = c.bodyFile;
-    let temp = null;
-    if (!bodyFile) {
-      temp = path.join(os.tmpdir(), `orch-comment-${process.pid}-${posted.length}.md`);
-      fs.writeFileSync(temp, c.body);
-      bodyFile = temp;
-    }
+    const { file, temp } = bodyToFile(c.body, c.bodyFile, "comment");
+    const prNumber = typeof c.pr === "number" ? c.pr : newPrNumber;
     try {
-      const result = post({ key: data.key, kind: c.kind, bodyFile, pr: c.pr });
-      posted.push({ kind: c.kind, pr: c.pr ?? null, commentId: result.commentId });
+      const result = post({ key: data.key, kind: c.kind, bodyFile: file, pr: prNumber });
+      posted.push({ kind: c.kind, pr: prNumber ?? null, commentId: result.commentId });
     } finally {
       if (temp) fs.rmSync(temp, { force: true });
     }

@@ -70,6 +70,30 @@ export function post({ key, kind, bodyFile, pr, update }) {
     triage: snapshotPr?.triageCommentId,
   }[kind];
 
+  // 何をするつもりかを先に決める。--dry-run はここで返して、state を触らない。
+  const intendedStatus = {
+    memo: openQuestions(body).length ? "waiting-answer" : "memo-review",
+    split: "split-review",
+    approve: "pr-review",
+    triage: null,
+  }[kind];
+
+  if (isDryRun()) {
+    return {
+      dryRun: true,
+      wouldPost: {
+        kind,
+        target: pr ? `PR #${pr}` : `Issue #${number}`,
+        update: Boolean(update),
+        commentId: update ? existingId : null,
+        collapse: Boolean(existingId && !update && ["memo", "split"].includes(kind)),
+      },
+      wouldTransition: intendedStatus
+        ? { key, from: snapshot.status, to: intendedStatus }
+        : null,
+    };
+  }
+
   let result;
   if (update) {
     if (!existingId) throw new Error(`--update の対象コメントが state に無い（kind: ${kind}）`);
@@ -88,9 +112,8 @@ export function post({ key, kind, bodyFile, pr, update }) {
       entry.commentId = result.id;
       entry.redo = null;
       entry.answersReady = false;
-      const to = openQuestions(body).length ? "waiting-answer" : "memo-review";
-      setStatus(entry, to);
-      transition.to = to;
+      setStatus(entry, intendedStatus);
+      transition.to = intendedStatus;
     } else if (kind === "split") {
       entry.commentId = result.id;
       entry.redo = null;

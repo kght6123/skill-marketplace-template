@@ -38,6 +38,8 @@ Claude Code 固有の機能は使わない。ワーカーのCLIは差し替え�
 4. **state.json を直接編集しない**。書き込みは `orch state set` のみ
 5. **AIがやらないこと**: スタンプを押さない／Issue本文を編集しない／自分が作ったもの以外のコメントを編集しない／`gh pr merge` を直接叩かない（マージは `orch merge-train` だけ）
 6. **ワーカーは state を書かない**。`ORCH_ROLE=worker` のセッションでは `orch` が書き込み系を拒否する。結果はエンベロープで返す
+7. **ワーカーは外に何も作らない**。worktree作成・PR作成（`gh pr create`）・コメント投稿はすべてマネージャ。ワーカーは頼むだけ
+8. **ワーカーの終了コードが 0 でなければ、エンベロープがあっても採用しない**。出力の後で落ちた可能性があるため
 
 ---
 
@@ -81,7 +83,7 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 | `orch phase` | 今の段。実装とマージが有効かどうか |
 | `orch stamps` | スタンプの割り当てと、フッタに書く文面 |
 | `orch worker --key K --action A --prompt f` | 各リポジトリの worktree でワーカーを起動する |
-| `orch apply --file f` | ワーカーの結果エンベロープを state に反映する |
+| `orch apply --file f` | ワーカーの結果エンベロープを反映する（PR作成 → state → コメント投稿） |
 | `orch conflict --files a,b` | 競合を自動解決とhuman確認に分類 |
 
 詳しい引数は `node "$ORCH"` を引数なしで実行すると出る。
@@ -113,6 +115,25 @@ state.json を失った場合は `orch sync --rebuild` でコメントの目印�
 ```
 
 リアクション作成APIを拒否しておくと、AIが自分で🚀を押して自分の作ったものを承認する事故が起きない。
+
+ワーカーが動く**各リポジトリ側**の `.claude/settings.json` には、さらに外向きの操作を足して拒否する。
+ワーカーの仕事は「今いる worktree でコードを直してコミットする」ことだけで、PRもコメントも作らない。
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Bash(gh pr create:*)",
+      "Bash(gh pr merge:*)",
+      "Bash(gh pr comment:*)",
+      "Bash(gh issue comment:*)",
+      "Bash(gh api:*reactions*)",
+      "Bash(git worktree:*)",
+      "Bash(git push:*--force*)"
+    ]
+  }
+}
+```
 
 ## 6. 段（どこまで自動でやるか）
 

@@ -22,11 +22,27 @@ node "$ORCH" queue
 node "$ORCH" next --mode memo
 ```
 
-`items` が空なら何もせずに終わる。空でなければ、各 `item` について:
+`items` が空なら何もせずに終わる。空でなければ、各 `item` の **`action` ごとに手順が違う**。
+`item.action` で分岐し、下の表の列をそのまま実行する。**どの action も lint→post だと思い込まない。**
 
-1. `action` を `orch-issue-memo` に渡して生成させる
-2. `node "$ORCH" lint memo <file>` — exit 2 なら作り直し（最大2回）
-3. `node "$ORCH" post --key <key> --kind memo|split --body <file>`
+| action | 生成するもの | lint | post | 仕上げ |
+|---|---|---|---|---|
+| `sizing` | 見積もり（JSON、ファイル無し） | しない | **しない** | `state set --set '{"sizing":{"estimatedPrs":N,"examples":M}}'` |
+| `memo` | 理解メモ本文 | `lint memo` | `post --kind memo` | post が status を進める |
+| `memo-update` | 回答を反映した本文 | `lint memo` | `post --kind memo --update` | 同じコメントを上書き |
+| `memo-redo` | 直した本文（新規） | `lint memo` | `post --kind memo` | 旧コメントは post が折りたたむ |
+| `split` | 分割案 | `lint memo` | `post --kind split` | → split-review |
+| `split-redo` | 直した分割案（新規） | `lint memo` | `post --kind split` | 旧は post が折りたたむ |
+| `create-children` | Sub Issue（GitHub上） | しない | **しない** | `gh issue create --parent` → 子を `state set --status sizing` → 親に `--set '{"childrenCreated":true}'` |
+
+`sizing` と `create-children` には投稿する本文が無い。ファイルが無いのに `lint` や `post` を呼ぶと
+そこで落ちる。逆に本文を作る5つは、**lint を通さずに post しない**（exit 2 なら作り直し、最大2回、
+通らなければ `state set --status needs-human` で止める）。
+
+生成そのものは `orch-issue-memo` に `key` と `action` を渡して任せる。マネージャは action の振り分けと
+lint／post の実行だけを持つ。
+
+`state set` で `sizing` を書いた後、大小の判定はしない。次の `orch next` が `split` か `memo` を返す。
 
 最大件数は `limits.memoPerTick`（既定3）。`orch next` が返した件数を超えて処理しない。
 
@@ -38,7 +54,17 @@ node "$ORCH" queue
 node "$ORCH" next --mode build
 ```
 
-`items` の `action` ごとに、ワーカー用の指示を書いて起動する。
+`items` の `action` ごとに、ワーカー用の指示を書いて起動する。build 側は3つとも
+「ワーカーを起動 → 返ってきたエンベロープを `orch worker` が反映」で同じ形になる。
+
+| action | ワーカーに頼むこと | エンベロープで返るもの |
+|---|---|---|
+| `implement` | 1本目の実装 | `pullRequest`（新規PR）＋ `approve` コメント |
+| `implement-continue` | 続きのPR（base は前のブランチ） | 同上 |
+| `apply-triage` | 🚀済みの対応案を反映して再プッシュ | `prs`（`headSha` 更新）＋ 新しい `approve` コメント |
+
+PR作成もコメント投稿もマネージャ側で `orch worker` がやる。ワーカーの出力を見て自分で
+`gh pr create` や `orch post` を追加で叩かない（二重に作る）。
 
 ```bash
 cat > /tmp/task-125.md <<'TASK'
@@ -99,9 +125,12 @@ node "$ORCH" next --human --project org/api  # 同じプロジェクトを優先
 ## 1周の流れ
 
 ```
-sync ──→ queue ──→ next ──→ 生成スキル ──→ lint ──→ post ──→ state更新
-                     │                        │
-                     └─ 空なら終了            └─ exit 2 なら作り直し（最大2回）
+sync ──→ queue ──→ next ──→ action で分岐
+                     │        ├─ sizing / create-children ──→ state set（lint・post は無し）
+                     └─ 空なら終了
+                              ├─ memo / split 系 ──→ 生成 ──→ lint ──→ post ──→ state更新
+                              │                                 └─ exit 2 なら作り直し（最大2回）
+                              └─ implement 系 ──→ orch worker ──→ PR作成・投稿・state更新
 ```
 
 ## 定期実行

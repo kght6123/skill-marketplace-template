@@ -1,6 +1,6 @@
 ---
 name: orch-implement
-description: 承認済みの理解メモから実装して stacked PR を作るワーカー側のスキル。ユーザーが「このIssueを実装して」「orchのbuildで実装して」「PRを作って」「レビュー指摘に対応して」「次のPRを実装して」「セルフレビューのコメントを作って」などと言ったら使う。各リポジトリの worktree を作業ディレクトリにして動き、スケルトンのテスト名からテストを書き、AIレビューを通してPRを作る。state.json は書かず、結果をエンベロープで返す。マージはしない。
+description: 承認済みの理解メモから実装して stacked PR を作るワーカー側のスキル。ユーザーが「このIssueを実装して」「orchのbuildで実装して」「PRを作って」「レビュー指摘に対応して」「次のPRを実装して」「セルフレビューのコメントを作って」などと言ったら使う。マネージャが用意した worktree の中で動き、スケルトンのテスト名からテストを書き、AIレビューを通して PR の中身まで用意する。worktree作成・PR作成・コメント投稿・state.json はマネージャの担当で、ワーカーは結果をエンベロープで返すだけ。マージはしない。
 argument-hint: <org/repo#123> [--mode implement|continue|apply-triage]
 ---
 
@@ -8,12 +8,24 @@ argument-hint: <org/repo#123> [--mode implement|continue|apply-triage]
 
 理解メモに🚀が付いた（status が `ready`）Issueだけを実装する。メモが無いものには着手しない。
 
-**このスキルはワーカーとして動く。** `orch worker` が用意した worktree が作業ディレクトリになっていて、
-そのリポジトリの `CLAUDE.md`・`.claude/settings.json`・フック・プロジェクトスキルが効いている。
-リポジトリの流儀（テストコマンド・規約）は、ここにあるものに従う。
+**このスキルはワーカーとして動く。** worktree もブランチもマネージャ（`orch worker`）が用意済みで、
+それが最初から作業ディレクトリになっている。そのリポジトリの `CLAUDE.md`・`.claude/settings.json`・
+フック・プロジェクトスキルが効いている。リポジトリの流儀（テストコマンド・規約）は、ここにあるものに従う。
 
-**state.json は書かない。** `ORCH_ROLE=worker` なので `orch state set` や `orch post` は拒否される。
-やったことは最後にエンベロープで返し、state に反映するのはマネージャ。
+**ワーカーは外に何も書かない。** やるのは「今いるディレクトリでコードを直してコミットする」ことだけ。
+worktree を作らない・state.json を書かない・コメントを投稿しない・PRを作らない。
+`ORCH_ROLE=worker` なので `orch state set` / `orch post` / `orch worker` は拒否される。
+やったことと作ってほしいものは、最後にエンベロープ1個で返す。反映はすべてマネージャがやる。
+
+| | ワーカー（このスキル） | マネージャ |
+|---|---|---|
+| worktree・ブランチ | 用意されたものを使う | 作る・片付ける |
+| コード・テスト・コミット | やる | やらない |
+| PR作成 | `pullRequest` で頼む | `gh pr create` する（lint後） |
+| コメント投稿 | `comments` で頼む | `orch post` で投稿する |
+| state.json | 触らない | `orch apply` で反映する |
+
+渡される環境変数は `ORCH_ROLE` / `ORCH_KEY`（対象キー）/ `ORCH_ACTION`（モード）/ `ORCH_BRANCH`（作業ブランチ）。
 
 スクリプトの場所と実行の鉄則は `orch-core/SKILL.md`、役割の境界は `orch-core/references/topology.md`。
 
@@ -23,9 +35,9 @@ argument-hint: <org/repo#123> [--mode implement|continue|apply-triage]
 
 | action | 条件 | やること |
 |---|---|---|
-| `implement` | ready、依存先がすべてdone、pr-reviewが上限未満 | worktree → テスト → 実装 → AIレビュー → PR作成 |
-| `implement-continue` | implementing、または前のPRがマージ済み | 次のPRを実装 |
-| `apply-triage` | 対応案に🚀済み | 修正して再プッシュ、新しい承認用コメント |
+| `implement` | ready、依存先がすべてdone、pr-reviewが上限未満 | テスト → 実装 → AIレビュー → PR本文を用意 |
+| `implement-continue` | implementing、または前のPRがマージ済み | 次のPRを実装（base は前のブランチ） |
+| `apply-triage` | 対応案に🚀済み | 修正して再プッシュ、新しい承認用コメントを用意 |
 
 `maxStackedPrs`（既定10）に達しても作業が残るときは、停止して残作業を新しいIssueとして `sizing` に登録する。
 
@@ -40,13 +52,16 @@ gh issue view <number> --repo <org/repo> --json title,body,comments
 
 メモの **例の表** と **スケルトン** が仕様書。ここに無い機能を足さない。
 
-### 2. worktree を切る
+### 2. 今いる場所を確かめる
+
+worktree は作らない。作られたものの中にもういる。
 
 ```bash
-git worktree add ../<repo>-orch-<number> -b orch/<number>
+pwd && git branch --show-current   # = $ORCH_BRANCH
 ```
 
-ブランチは必ず `orch/` 接頭辞。**`orch/` 以外のブランチに force push しない。**
+ブランチが `$ORCH_BRANCH` と違っていたら、切り替えずに `needs_human: true` で返す。
+**このディレクトリの外に出ない。`git worktree add` も `git push --force` もしない。**
 
 ### 3. テストから書く
 
@@ -67,23 +82,37 @@ step の種類と共通の出力形式は `references/review-pipeline.md`。
 自分のコードを自分で見ると通ってしまうので、`memo-check` は `orch-memo-check` スキルで
 別に実行する。
 
-### 6. PR を作る
+### 6. PR の中身を用意する（作るのはマネージャ）
 
-本文は `references/pr-template.md` の形。書いたら lint を通す。
+コミットして push するところまでがワーカーの仕事。`gh pr create` は叩かない。
+
+```bash
+git push -u origin "$ORCH_BRANCH"
+```
+
+本文は `references/pr-template.md` の形でファイルに書き、手元で lint を通しておく。
 
 ```bash
 node "$ORCH" lint pr /tmp/pr-body.md --title "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123"
 ```
 
-exit 2 なら作り直し。通ったら作成する。2本目以降は前のPRのブランチを base にする（stacked）。
+exit 2 なら作り直す。通ったらエンベロープの `pullRequest` に載せて返す。
 
-```bash
-gh pr create --repo <org/repo> --base orch/<前のPRのブランチ> --head orch/<このPR> \
-  --title "..." --body-file /tmp/pr-body.md
-node "$ORCH" state set <key> --set '{"prs":[{"number":46,"order":2,"headSha":"...","merged":false}]}'
+```json
+"pullRequest": {
+  "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",
+  "head": "orch/125",
+  "base": "orch/124",
+  "bodyFile": "/abs/path/pr-body.md",
+  "draft": false
+}
 ```
 
-### 7. セルフレビューの承認用コメントを投稿する
+`base` は2本目以降だけ、前のPRのブランチを指す（stacked）。1本目は省くと既定ブランチになる。
+マネージャは作る前にもう一度 `lint pr` をかけ、落ちたら作らない。番号は作った後にマネージャが
+`prs` へ記録するので、ワーカーが番号を書く必要はない。
+
+### 7. セルフレビューの承認用コメントを用意する
 
 ```markdown
 <!-- ai-approve v1 sha=abc1234 -->
@@ -114,20 +143,30 @@ node "$ORCH" state set <key> --set '{"prs":[{"number":46,"order":2,"headSha":"..
   "key": "org/order-api#125",
   "action": "implement",
   "status": "pr-review",
-  "prs": [{ "number": 50, "order": 1, "headSha": "aaa111", "branch": "orch/125" }],
+  "pullRequest": {
+    "title": "feat(order-api): 期間指定でCSVを絞り込む [1/3] #125",
+    "head": "orch/125",
+    "bodyFile": "/abs/path/pr-body.md"
+  },
   "review": [{ "reviewer": "memo-check", "findings": [] }],
-  "comments": [{ "kind": "approve", "pr": 50, "bodyFile": "/abs/path/approve.md" }],
+  "comments": [{ "kind": "approve", "bodyFile": "/abs/path/approve.md" }],
   "needs_human": false,
   "notes": "テストを3件追加。エラーは400で返した"
 }
 <<<END>>>
 ```
 
+既にあるPRを更新しただけなら `pullRequest` は省き、`prs` に観測した番号と `headSha` を入れる。
+
+```json
+"prs": [{ "number": 50, "order": 1, "headSha": "bbb222", "branch": "orch/125" }]
+```
+
 ### 9. 指摘対応（apply-triage）
 
 `orch-review-triage` が出した対応案に🚀が付いたものだけを実装する。
 
-- 修正してプッシュすると承認は無効になる。新しい承認用コメントを投稿し、旧を折りたたむ
+- 修正してプッシュすると承認は無効になる。新しい承認用コメントを `comments` に載せる（旧の折りたたみはマネージャがやる）
 - セルフレビューの対象は、前回承認したSHA（`approvedSha`）からの差分だけ
 - 対応が終わったことは申告しない。`action: apply-triage` が成功した事実からマネージャが記録する
 

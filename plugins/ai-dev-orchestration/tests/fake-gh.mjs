@@ -25,6 +25,10 @@ if (bodyIdx >= 0 && process.env.FAKE_GH_BODY) {
   const value = flag === "-F" ? fs.readFileSync(raw.slice(1), "utf8") : raw;
   fs.writeFileSync(process.env.FAKE_GH_BODY, value);
 }
+const fileIdx = args.indexOf("--body-file");
+if (fileIdx >= 0 && process.env.FAKE_GH_BODY) {
+  fs.writeFileSync(process.env.FAKE_GH_BODY, fs.readFileSync(args[fileIdx + 1], "utf8"));
+}
 
 function out(value) {
   process.stdout.write(typeof value === "string" ? value : JSON.stringify(value));
@@ -46,6 +50,11 @@ if (args[0] === "issue" && args[1] === "list") out(scenario.issueList ?? []);
 if (args[0] === "issue" && args[1] === "view") out(scenario.issueView ?? {});
 if (args[0] === "pr" && args[1] === "view") out(scenario.prView ?? {});
 if (args[0] === "pr" && args[1] === "merge") out("merged\n");
+if (args[0] === "pr" && args[1] === "create") {
+  if (scenario.prCreateFails) boom("HTTP 422");
+  const number = scenario.createdPr ?? 90;
+  out(`https://github.com/org/order-api/pull/${number}\n`);
+}
 
 if (args[0] === "api" && joined.includes("graphql")) {
   if (scenario.graphql === "fail") boom("GraphQL: Something went wrong");

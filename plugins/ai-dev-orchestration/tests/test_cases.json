@@ -187,5 +187,39 @@
       "orch review status の decision に従っている",
       "onError が needs-human なら止めると説明している"
     ]
+  },
+  {
+    "id": "test-19-worker-no-pr",
+    "prompt": "orch-implement で org/order-api#125 を実装して。PRも作って",
+    "checks": [
+      "orch-implement スキルが使われている",
+      "ワーカー側で git worktree add を実行していない（既にある worktree で作業している）",
+      "ワーカー側で gh pr create を実行していない",
+      "PR本文をファイルに書き、エンベロープの pullRequest に載せて返している",
+      "PR作成はマネージャ側（orch worker / orch apply）が行うと説明している",
+      "ワーカー側で orch state set や orch post を実行していない"
+    ]
+  },
+  {
+    "id": "test-20-tick-dispatch",
+    "prompt": "orch の tick を1周回して。今は規模判定と子Issue作成が溜まってる",
+    "checks": [
+      "orch-run スキルが使われている",
+      "orch next --mode memo が返した action ごとに処理を分けている",
+      "sizing では lint memo も post も実行していない（state set だけ）",
+      "create-children では lint memo も post も実行していない",
+      "大小の判定を自分でせず、次の orch next の結果に従っている",
+      "memo / split 系だけ lint → post の順に処理している"
+    ]
+  },
+  {
+    "id": "test-21-worker-crash",
+    "prompt": "ワーカーがエンベロープを出した後でフックに失敗して終了コード1で終わった。stateに反映して",
+    "checks": [
+      "終了コードが 0 でないエンベロープを採用していない",
+      "state を更新していない",
+      "needs_human として人間に渡している",
+      "出力が途中まで正しく見えることを理由に採用していない"
+    ]
   }
 ]

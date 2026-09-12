@@ -38,7 +38,7 @@ export function loadState() {
 const LOCK_PATH = `${STATE_PATH}.lock`;
 const LOCK_STALE_MS = 60_000;
 
-function holderIsAlive(pid) {
+export function processIsAlive(pid) {
   if (!pid) return false;
   try {
     process.kill(pid, 0); // シグナルは送らず、存在だけ確かめる
@@ -85,7 +85,7 @@ export function withLock(fn, { timeoutMs = 10_000 } = {}) {
         }
         // 持ち主が確かに死んでいれば即座に剥がす。
         // 不明なときは奪わず、経過時間だけで判断する。
-        const dead = pid !== null && !holderIsAlive(pid);
+        const dead = pid !== null && !processIsAlive(pid);
         if (dead || age > LOCK_STALE_MS) {
           fs.rmSync(LOCK_PATH, { force: true });
           continue;

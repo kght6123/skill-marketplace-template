@@ -689,6 +689,219 @@ const together = await Promise.all([0, 0].map(() =>
 check("同時に始めても同じ worktree に入らない",
   new Set(together.map((r) => r.cwd)).size, 2);
 
+
+// --- ワーカーが 0 以外で終わったら、エンベロープがあっても採用しない --------
+// 出力の後でフックや後処理が落ちた可能性がある。部分的な stdout は信用できない。
+const dyingCli = path.join(home, "dying.sh");
+fs.writeFileSync(dyingCli, [
+  "#!/bin/sh",
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "org/order-api#125", "action": "implement", "status": "pr-review",',
+  '  "prs": [{ "number": 70, "headSha": "ccc" }] }',
+  "<<<END>>>",
+  "JSON",
+  "exit 1",
+].join("\n"));
+fs.chmodSync(dyingCli, 0o755);
+resetState(withWorker(dyingCli, { branchPrefix: "dying/", worktreeRoot: path.join(home, "wt-dying") }));
+const beforeDying = fs.readFileSync(path.join(home, "state.json"), "utf8");
+const dying = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile], { expectExit: 3 });
+check("終了コードが 0 でなければエンベロープを採用しない", dying.needs_human, true);
+check("終了コードを理由に挙げる", dying.exitCode, 1);
+check("state は変わらない", fs.readFileSync(path.join(home, "state.json"), "utf8"), beforeDying);
+
+// --- コメントAPIだけ落ちたら、回答が揃ったと判断しない --------------------
+resetState();
+run(["state", "set", "org/order-api#124", "--status", "waiting-answer"]);
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [],
+  commentFails: true,        // 本文だけ取れない
+  commentReactions: [],      // リアクションは取れる
+}) });
+const stillWaiting = json(["state", "get", "org/order-api#124"]).entry;
+check("コメント本文が取れなければ answersReady にしない", stillWaiting.answersReady ?? false, false);
+check("waiting-answer のまま", stillWaiting.status, "waiting-answer");
+
+// 取れるようになり、確認事項が全部チェック済みなら回答ありになる
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [],
+  comment: { id: 2345678902, body: "## 確認事項\n- [x] A\n- [x] B", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [],
+}) });
+check("取れたら answersReady が立つ",
+  json(["state", "get", "org/order-api#124"]).entry.answersReady, true);
+
+// --- post --dry-run は state を変えない ----------------------------------
+resetState();
+const beforePost = fs.readFileSync(path.join(home, "state.json"), "utf8");
+const wouldPost = json(
+  ["post", "--key", "org/order-api#124", "--kind", "memo", "--body", path.join(fixtures, "memo-ok.md"), "--dry-run"],
+  { env: withGh({ postedComment: { id: 999 } }) },
+);
+check("dry-run は投稿内容を返すだけ", wouldPost.dryRun, true);
+check("どこへ投稿するかは出す", wouldPost.wouldPost.kind, "memo");
+check("dry-run では state を書かない",
+  fs.readFileSync(path.join(home, "state.json"), "utf8"), beforePost);
+
+// --- 生きているワーカーの枠は、時間が経っても奪わない --------------------
+// タイムアウトだけで判断すると、長く走っているワーカーの worktree を横取りする。
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }],
+  worktreeRoot: path.join(home, "wt-alive"),
+  branchPrefix: "alive/",
+  worker: { command: "claude", args: ["-p"], timeoutMin: 1 }, // 1分で stale 扱いになる設定
+});
+const aliveDir = path.join(home, "wt-alive", "order-api-125");
+fs.mkdirSync(path.join(home, "wt-alive"), { recursive: true });
+fs.writeFileSync(`${aliveDir}.lock`, JSON.stringify({
+  pid: process.pid, hostname: os.hostname(), at: "2000-01-01T00:00:00Z",
+}));
+fs.utimesSync(`${aliveDir}.lock`, new Date(0), new Date(0)); // mtime は大昔
+const avoided = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]);
+check("持ち主のプロセスが生きていれば枠を奪わない", avoided.slot, 2);
+
+// 持ち主が死んでいれば、古いロックは剥がして再利用する
+fs.writeFileSync(`${aliveDir}.lock`, JSON.stringify({
+  pid: 2147483646, hostname: os.hostname(), at: "2000-01-01T00:00:00Z",
+}));
+check("持ち主が死んでいれば枠を再利用する",
+  json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]).slot, 1);
+
+// --- レビューの出力がJSONでなければ pass にしない ------------------------
+resetState({ review: { maxRounds: 2, onError: "needs-human", steps: [{ id: "lint", command: "echo not-json" }] } });
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review", prs: [{ number: 46, order: 1, headSha: "abc", merged: false }],
+})]);
+const badJson = json(["review", "run", "--key", "org/order-api#123", "--pr", "46"]);
+check("JSONとして読めない出力は失敗扱い", badJson.executed[0].ok, false);
+check("JSONでないレビューは pass にしない",
+  json(["review", "status", "--key", "org/order-api#123", "--pr", "46"], { expectExit: 3 }).decision,
+  "needs-human");
+
+// --- 使い回す worktree は前回の残骸を消してから渡す ----------------------
+const reuseCli = path.join(home, "reuse.sh");
+const dirtyOut = path.join(home, "reuse-dirty.txt");
+fs.writeFileSync(reuseCli, [
+  "#!/bin/sh",
+  `git status --porcelain > ${dirtyOut}`,
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION" }',
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(reuseCli, 0o755);
+resetState(withWorker(reuseCli, { branchPrefix: "reuse/", worktreeRoot: path.join(home, "wt-reuse") }));
+run(["worker", "--key", "org/order-api#125", "--prompt", promptFile]);
+const reuseDir = path.join(home, "wt-reuse", "order-api-125");
+fs.writeFileSync(path.join(reuseDir, "README.md"), "前のワーカーの書きかけ\n");
+fs.writeFileSync(path.join(reuseDir, "junk.tmp"), "残骸\n");
+const reused = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile]);
+check("使い回す worktree は綺麗な状態で渡される", fs.readFileSync(dirtyOut, "utf8").trim(), "");
+check("残骸のファイルは消える", fs.existsSync(path.join(reuseDir, "junk.tmp")), false);
+check("書きかけは戻る", fs.readFileSync(path.join(reuseDir, "README.md"), "utf8"), "hi\n");
+
+// --- 通しで1周（規模判定 → メモ → 承認 → 実装 → PR作成 → 承認用コメント） ---
+const e2eBody = path.join(home, "e2e-body.txt");
+const e2eCli = path.join(home, "e2e.sh");
+const prBody = path.join(home, "e2e-pr.md");
+fs.copyFileSync(path.join(fixtures, "pr-ok.md"), prBody);
+const approveBody = path.join(home, "e2e-approve.md");
+fs.writeFileSync(approveBody, "<!-- ai-approve v1 sha=eee555 -->\nレビュー対象\n");
+fs.writeFileSync(e2eCli, [
+  "#!/bin/sh",
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
+  `  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",`,
+  `                   "head": "e2e/125", "bodyFile": "${prBody}" },`,
+  `  "comments": [{ "kind": "approve", "bodyFile": "${approveBody}" }] }`,
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(e2eCli, 0o755);
+resetState(withWorker(e2eCli, { branchPrefix: "e2e/", worktreeRoot: path.join(home, "wt-e2e") }));
+
+// 1. 規模判定 → 小なのでメモへ
+check("規模判定から始まる",
+  json(["next", "--mode", "memo"]).items.find((i) => i.key === "org/admin-web#46").action, "sizing");
+run(["state", "set", "org/admin-web#46", "--set", '{"sizing":{"estimatedPrs":2,"examples":3}}']);
+check("小なら理解メモを作る",
+  json(["next", "--mode", "memo"]).items.find((i) => i.key === "org/admin-web#46").action, "memo");
+
+// 2. メモを投稿 → memo-review
+// 確認事項に未チェックが残っていると waiting-answer で止まるので、回答済みのメモにする
+const e2eMemo = path.join(home, "e2e-memo.md");
+fs.writeFileSync(e2eMemo,
+  fs.readFileSync(path.join(fixtures, "memo-ok.md"), "utf8").replace(/^(\s*[-*]\s*)\[ \]/gm, "$1[x]"));
+run(["post", "--key", "org/admin-web#46", "--kind", "memo", "--body", e2eMemo],
+  { env: withGh({ postedComment: { id: 4242 } }) });
+check("投稿でメモ確認待ちになる",
+  json(["state", "get", "org/admin-web#46"]).entry.status, "memo-review");
+
+// 3. 人間が 🚀 を押す → ready
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [],
+  comment: { id: 4242, body: "## 理解メモ", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [{ content: "rocket", created_at: "2026-09-12T05:00:00Z", user: { login: "kght6123" } }],
+}) });
+check("🚀 で着手可能になる", json(["state", "get", "org/admin-web#46"]).entry.status, "ready");
+
+// 4. build が実装として拾う
+// 他の行列を空けて、承認されたメモが実装として選ばれることを見る
+run(["state", "set", "org/order-api#125", "--status", "done"]);
+for (const key of ["org/order-api#123", "org/order-api#124"]) {
+  run(["state", "set", key, "--status", "done"]);
+}
+const e2eBuild = json(["next", "--mode", "build"]);
+check("承認済みのメモが実装対象になる",
+  e2eBuild.items.find((i) => i.key === "org/admin-web#46")?.action ?? JSON.stringify(e2eBuild),
+  "implement");
+
+// 5. ワーカーを回す → マネージャがPRを作り、承認用コメントを投稿する
+resetState(withWorker(e2eCli, { branchPrefix: "e2e/", worktreeRoot: path.join(home, "wt-e2e") }));
+run(["state", "set", "org/order-api#125", "--set", '{"blockedBy":[]}']);
+const e2e = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { env: withGh({ createdPr: 91, postedComment: { id: 8888 } }, { FAKE_GH_BODY: e2eBody }) });
+check("PR はマネージャが作る", e2e.createdPr.number, 91);
+check("作ったPRを state に記録する", e2e.applied.prs.map((p) => p.number), [91]);
+check("承認用コメントは作ったPR番号に付く", e2e.posted[0].pr, 91);
+check("approvalCommentId を記録する",
+  json(["state", "get", "org/order-api#125"]).entry.prs[0].approvalCommentId, 8888);
+check("投稿された本文は承認用コメントの中身",
+  fs.readFileSync(e2eBody, "utf8").includes("ai-approve"), true);
+check("セルフレビュー済みにはしない",
+  json(["state", "get", "org/order-api#125"]).entry.prs[0].selfApproved, false);
+
+// PR本文が lint を通らなければ、PRを作らずに止まる
+const badPr = path.join(home, "e2e-bad-pr.md");
+fs.writeFileSync(badPr, "見出しの無い本文\n");
+const badCli = path.join(home, "e2e-bad.sh");
+fs.writeFileSync(badCli, [
+  "#!/bin/sh",
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
+  `  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",`,
+  `                   "head": "bad/125", "bodyFile": "${badPr}" } }`,
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(badCli, 0o755);
+resetState(withWorker(badCli, { branchPrefix: "bad/", worktreeRoot: path.join(home, "wt-bad") }));
+const badPrRun = run(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { expectExit: 1, env: withGh({ createdPr: 92 }) });
+check("PR本文が lint を通らなければ作らない", /lint/.test(badPrRun), true);
+check("PRを作らなければ state にも入らない",
+  json(["state", "get", "org/order-api#125"]).entry.prs.length, 0);
+
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} 件が失敗` : "\nすべて成功");
 process.exit(failed ? 1 : 0);

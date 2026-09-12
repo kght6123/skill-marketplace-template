@@ -37,7 +37,7 @@ import { post } from "./lib/post.mjs";
 import { lintMemo, lintPr } from "./lib/lint.mjs";
 import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
-import { runWorker, parseEnvelope, applyEnvelope, postEnvelopeComments } from "./lib/worker.mjs";
+import { runWorker, parseEnvelope, finishEnvelope } from "./lib/worker.mjs";
 import { emojiFor, approveNames, parkNames, redoNames } from "./lib/stamps.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
@@ -337,9 +337,13 @@ async function main() {
       });
       if (!envelope.ok) return needsHuman("エンベロープが不正", { errors: envelope.errors });
       const action = opts.action || envelope.data.action;
-      const applied = applyEnvelope(envelope.data, { action });
-      const posted = postEnvelopeComments(envelope.data);
-      return emit({ command: "apply", ...applied, posted });
+      const done = finishEnvelope(envelope.data, { action });
+      return emit({
+        command: "apply",
+        ...done.applied,
+        createdPr: done.createdPr,
+        posted: done.posted,
+      });
     }
 
     case "merge-train": {

@@ -6,9 +6,10 @@
 マネージャ（$ORCH_HOME で起動）
   ├ GitHub API と state.json だけを触る。コードは読まない
   ├ 理解メモ・分割案・トリアージ（リポジトリ非依存）
+  ├ PR作成・コメント投稿・state更新（ワーカーの依頼を受けて代行する）
   └ ワーカーを起動する ──┬─ ワーカー A（~/src/order-api の worktree で起動）
                           └─ ワーカー B（~/src/admin-web の worktree で起動）
-                               実装・テスト・AIレビュー・PR作成
+                               実装・テスト・AIレビュー・PR本文の作成
 ```
 
 ## なぜ分けるのか
@@ -44,9 +45,17 @@ Claude Code の設定は**セッションの作業ディレクトリ**に紐づ�
 worktree は `worktreeRoot`（既定 `$ORCH_HOME/worktrees`）の下に作られ、`orch worker` が無ければ作る。
 接頭辞は `branchPrefix`（既定 `orch/`）。
 
-同じIssueに複数のワーカーが来たら、連番で分ける。動いているワーカーは worktree に
-`.orch-worker.lock` を置くので、空いている番号が選ばれる。終われば1番から再利用される。
-`--dry-run` は割り当て先を計算して返すだけで、worktree もブランチも作らない。
+同じIssueに複数のワーカーが来たら、連番で分ける。枠は worktree の**隣**に置く
+`<dir>.lock`（`O_EXCL` で作る）で押さえる。ディレクトリの中に置くと `git worktree add` が
+「既に存在する」で落ちるため。ロックには PID とホスト名を書く。
+
+- 枠を取ってから worktree を作る。作ってから取ると、同じディレクトリを2本が掴む窓が残る
+- 古いロックでも、書いてある PID が同じホストで生きていれば奪わない。タイムアウトだけで奪うと、
+  長く走っているワーカーの worktree を横取りしてしまう
+- 使い回す worktree は、`git status --porcelain` で汚れていれば `reset --hard` と `clean -fd` を
+  かけてから渡す。前のワーカーの中断跡の上で実装させない
+- 終われば1番から再利用される
+- `--dry-run` は割り当て先を計算して返すだけで、worktree もブランチも作らない
 
 | 本数 | ディレクトリ | ブランチ |
 |---|---|---|
@@ -76,7 +85,7 @@ state.json を書くのはマネージャだけなので、ワーカーを並行
 |---|---|
 | 往路: 指示 | プロセス起動の引数（または標準入力） |
 | 往路: 作業場所 | 子プロセスの作業ディレクトリ（worktree） |
-| 往路: 役割 | 環境変数 `ORCH_ROLE` `ORCH_KEY` `ORCH_ACTION` |
+| 往路: 役割 | 環境変数 `ORCH_ROLE` `ORCH_KEY` `ORCH_ACTION` `ORCH_BRANCH` |
 | 復路: 結果 | 標準出力のエンベロープ |
 | 復路: 失敗 | 終了コード |
 
@@ -192,9 +201,10 @@ node "$ORCH" apply --file /tmp/worker-output.txt
   "key": "org/order-api#125",
   "action": "implement",
   "status": "pr-review",
-  "prs": [{ "number": 50, "order": 1, "headSha": "aaa111", "branch": "orch/125" }],
+  "pullRequest": { "title": "feat(order-api): … [1/3] #125", "head": "orch/125",
+                   "base": "orch/124", "bodyFile": "/path/to/pr-body.md" },
   "review": [{ "reviewer": "memo-check", "findings": [] }],
-  "comments": [{ "kind": "approve", "pr": 50, "bodyFile": "/path/to/approve.md" }],
+  "comments": [{ "kind": "approve", "bodyFile": "/path/to/approve.md" }],
   "needs_human": false,
   "notes": "テストを3件追加"
 }
@@ -205,7 +215,8 @@ node "$ORCH" apply --file /tmp/worker-output.txt
 
 | 項目 | ワーカー | マネージャ |
 |---|---|---|
-| `prs[].number` `order` `headSha` `branch` `base` `title` | ✓ | |
+| `prs[].number` `order` `headSha` `branch` `base` `title` | ✓（既存PRの観測値） | |
+| `pullRequest`（作ってほしいPRの中身） | ✓（依頼だけ） | 実際に作る |
 | `merged` `selfApproved` `approvalCommentId` `approvedSha` `triageApproved` `triageApplied` | | ✓ |
 | `status` | action ごとの許可リスト内だけ | |
 | `review` `comments` `notes` `needs_human` | ✓ | |
@@ -222,8 +233,24 @@ needs-human にする。ワーカーが仕様を誤解したまま進むのを�
 指摘対応が終わったかどうか（`triageApplied`）は、ワーカーの自己申告ではなく
 action と実行結果からマネージャが決める。
 
+### PR を作るのはマネージャ
+
+`pullRequest` は「作ってほしいPRの中身」。ワーカーはコミットして push するところまでで、
+`gh pr create` は叩かない。マネージャは受け取った本文に **もう一度 `lint pr` をかけてから** 作る。
+ワーカー側で作らせると、テンプレートの上限（本文60行・見てほしい所3つ）をすり抜けられるため。
+lint が通らなければPRは作らず、そのIssueは止まる。
+
 `comments` は「マネージャに投稿してほしいコメント」。ワーカーは投稿できないので、本文だけを返す。
 マネージャは `orch post --key … --kind approve --pr 50 --body <bodyFile>` で投稿する。
+新しく作るPR宛てのコメントは `pr` を省いてよい。マネージャが作成後の番号に差し替える。
+
+マネージャ側の順番は固定で、`orch worker` / `orch apply` がこの順で実行する。
+
+```
+1. PR作成（lint pr → gh pr create）
+2. state 反映（作ったPR番号を含めて）
+3. コメント投稿（新規PR宛ては番号を差し替え）
+```
 
 マネージャ側の処理:
 
