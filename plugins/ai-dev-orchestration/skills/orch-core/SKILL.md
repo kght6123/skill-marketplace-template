@@ -17,7 +17,11 @@ argument-hint: [init|status|config] [--repo org/repo]
 
 セッションは2種類ある。**マネージャ**は `$ORCH_HOME` で起動し、GitHub と state.json だけを触る。
 **ワーカー**は各リポジトリの worktree で起動し、実装する。そこで起動しないと、そのリポジトリの
-`.claude/settings.json`（権限・フック）とプロジェクトスキルが効かない。詳しくは `references/topology.md`。
+`.claude/settings.json`（権限・フック）とプロジェクトスキルが効かない。
+
+連携に使うのはプロセス起動・作業ディレクトリ・環境変数・標準出力・終了コードだけで、
+Claude Code 固有の機能は使わない。ワーカーのCLIは差し替えられる（Codex / OpenCode / Copilot CLI）。
+詳しくは `references/topology.md`。
 
 ---
 

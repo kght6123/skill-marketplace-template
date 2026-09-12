@@ -16,7 +16,11 @@ export const DEFAULT_CONFIG = {
   // worktree を作る場所
   worktreeRoot: null,
   // ワーカーの起動コマンド
-  worker: { command: "claude", args: ["-p"], timeoutMin: 30 },
+  // ワーカーの起動コマンド。Claude Code 以外でも、
+  // 「プロンプトを渡して標準出力を読む」CLIならそのまま使える。
+  //   args に {prompt} があればその位置に差し込む。無ければ末尾に足す
+  //   promptVia: "arg"（既定）/ "stdin"
+  worker: { command: "claude", args: ["-p"], promptVia: "arg", timeoutMin: 30 },
   wip: { selfReview: 3, memoReview: 3, splitReview: 2 },
   sizing: { maxPrs: 10, maxExamples: 5, maxDepth: 3 },
   nextTask: {

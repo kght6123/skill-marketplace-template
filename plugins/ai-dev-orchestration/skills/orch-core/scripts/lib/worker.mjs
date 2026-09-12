@@ -102,22 +102,43 @@ export function applyEnvelope(data) {
   });
 }
 
+// 起動コマンドを組み立てる。{prompt} があればその位置に差し込み、無ければ末尾に足す。
+// ツールごとの流儀の違いは、この2つ（引数の位置と stdin）だけで吸収できる。
+export function buildCommand(worker, prompt) {
+  const args = worker.args || [];
+  const hasPlaceholder = args.some((a) => a.includes("{prompt}"));
+  const argv = args.map((a) => a.replace("{prompt}", prompt));
+  if (worker.promptVia !== "stdin" && !hasPlaceholder) argv.push(prompt);
+  return { command: worker.command, argv, hasPlaceholder };
+}
+
 // ワーカーを1件起動する。並行させたいときは、マネージャがこれを複数同時に呼ぶ。
 export function runWorker(config, { key, action, promptFile, dryRun = false }) {
   if (!loadState().issues[key]) throw new Error(`state に未登録: ${key}`);
   const { dir, branch } = ensureWorktree(config, key);
   const prompt = fs.readFileSync(promptFile, "utf8");
-  const { command, args, timeoutMin } = config.worker;
+  const worker = config.worker;
+  const { command, argv } = buildCommand(worker, prompt);
+  const viaStdin = worker.promptVia === "stdin";
 
   if (dryRun) {
-    return { dryRun: true, key, action, cwd: dir, branch, workerCommand: [command, ...args].join(" ") };
+    // プロンプト本文は長いので、表示では差し替える
+    const shown = buildCommand(worker, "<prompt>");
+    return {
+      dryRun: true, key, action, cwd: dir, branch,
+      workerCommand: [shown.command, ...shown.argv].join(" "),
+      promptVia: viaStdin ? "stdin" : "arg",
+    };
   }
 
-  const res = spawnSync(command, [...args, prompt], {
+  const res = spawnSync(command, argv, {
     cwd: dir,
     encoding: "utf8",
-    timeout: (timeoutMin || 30) * 60_000,
+    timeout: (worker.timeoutMin || 30) * 60_000,
     maxBuffer: 64 * 1024 * 1024,
+    // stdin は閉じる。開いたままだと EOF を待って止まるCLIがある（codex exec など）
+    stdio: viaStdin ? ["pipe", "pipe", "pipe"] : ["ignore", "pipe", "pipe"],
+    input: viaStdin ? prompt : undefined,
     env: { ...process.env, ORCH_ROLE: "worker", ORCH_KEY: key, ORCH_ACTION: action },
   });
   if (res.error) throw new Error(`ワーカーを起動できません: ${res.error.message}`);

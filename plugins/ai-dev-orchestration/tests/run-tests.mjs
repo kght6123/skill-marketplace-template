@@ -162,6 +162,50 @@ const dry = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile
 check("worktree を作ってその中で起動する", dry.cwd, path.join(home, "wt", "order-api-125"));
 check("ブランチは ai/ 接頭辞", dry.branch, "ai/125");
 
+// --- ワーカーCLIの差し替え（Claude Code 限定にしない）----------------
+const presets = {
+  "claude -p <prompt>": { command: "claude", args: ["-p"] },
+  "codex exec <prompt>": { command: "codex", args: ["exec"] },
+  "opencode run <prompt>": { command: "opencode", args: ["run"] },
+  "copilot -p <prompt> --allow-all-tools": {
+    command: "copilot", args: ["-p", "{prompt}", "--allow-all-tools"],
+  },
+};
+for (const [expected, worker] of Object.entries(presets)) {
+  resetState({ repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt"), worker });
+  check(`起動コマンドを組み立てる: ${expected}`,
+    json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]).workerCommand,
+    expected);
+}
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt"),
+  worker: { command: "claude", args: ["-p"], promptVia: "stdin" },
+});
+check("stdin でプロンプトを渡す設定",
+  json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]).promptVia, "stdin");
+
+// Claude Code ではない架空のCLIで、起動から state 反映まで通す
+const fakeCli = path.join(home, "fake-cli.sh");
+fs.writeFileSync(fakeCli, [
+  "#!/bin/sh",
+  'echo "cwd: $(pwd)"',
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
+  '  "prs": [{ "number": 99, "order": 1, "headSha": "fake123" }], "notes": "fake" }',
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(fakeCli, 0o755);
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt"),
+  worker: { command: fakeCli, args: [] },
+});
+const ran = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile]);
+check("Claude Code 以外のCLIでも1周する", ran.ok, true);
+check("ワーカーの結果が state に入る", ran.applied.prs.map((p) => p.number), [99]);
+check("ワーカーは worktree で動いている", ran.cwd, path.join(home, "wt", "order-api-125"));
+
 resetState({ repos: ["org/order-api"] });
 check("path が無ければ止まる（AIはcloneしない）",
   json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"], { expectExit: 1 }).ok,

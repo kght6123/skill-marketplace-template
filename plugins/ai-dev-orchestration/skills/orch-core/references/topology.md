@@ -55,6 +55,55 @@ sync / post / merge-train / worker / apply / state set / review
 ワーカーができるのは `lint` `queue` `state get` `state list` `conflict` の読み取り系だけ。
 state.json を書くのはマネージャだけなので、ワーカーを並行させても更新が消えない。
 
+## 連携の方式（Claude Code 限定にしない）
+
+マネージャとワーカーの間で使うのは、次の5つだけ。Claude Code のセッション間連携機能や
+サブエージェントは使わない。
+
+| 向き | 手段 |
+|---|---|
+| 往路: 指示 | プロセス起動の引数（または標準入力） |
+| 往路: 作業場所 | 子プロセスの作業ディレクトリ（worktree） |
+| 往路: 役割 | 環境変数 `ORCH_ROLE` `ORCH_KEY` `ORCH_ACTION` |
+| 復路: 結果 | 標準出力のエンベロープ |
+| 復路: 失敗 | 終了コード |
+
+どれも普通のUNIXの仕組みなので、「プロンプトを受け取って標準出力に書くCLI」なら何でもワーカーになる。
+実際、架空のシェルスクリプトをワーカーにして1周通すテストを入れてある。
+
+### 起動コマンドの設定
+
+`args` に `{prompt}` があればその位置に、無ければ末尾にプロンプトを足す。
+
+```json
+{ "worker": { "command": "claude", "args": ["-p"], "promptVia": "arg", "timeoutMin": 30 } }
+```
+
+| ツール | 設定 |
+|---|---|
+| Claude Code | `{ "command": "claude", "args": ["-p"] }` |
+| Codex CLI | `{ "command": "codex", "args": ["exec"] }` |
+| OpenCode | `{ "command": "opencode", "args": ["run"] }` |
+| Copilot CLI | `{ "command": "copilot", "args": ["-p", "{prompt}", "--allow-all-tools"] }` |
+
+`promptVia: "stdin"` にするとプロンプトを標準入力から渡す。既定では**標準入力は閉じて**起動する。
+開いたままだと EOF を待って止まるCLIがあるため（`codex exec` に既知の問題がある）。
+
+出力は**プレーンテキスト**にする。`--output-format json` のようにツール側でJSONに包む設定にすると、
+エンベロープがエスケープされて読めなくなる。
+
+### 手で回す
+
+自動起動を使わなくてもよい。完全にツール非依存で回すなら、次の2ステップで足りる。
+
+```bash
+# 1. 起動すべきコマンドと作業ディレクトリを出す（worktree もここで作られる）
+node "$ORCH" worker --key org/order-api#125 --prompt /tmp/task.md --dry-run
+
+# 2. 人間が好きなツールでそこで作業し、出力を保存して反映する
+node "$ORCH" apply --file /tmp/worker-output.txt
+```
+
 ## ワーカーの結果（エンベロープ）
 
 ワーカーは最後にこれを標準出力へ出す。マネージャはこれ以外を読まない。

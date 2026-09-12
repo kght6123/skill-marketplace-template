@@ -14,7 +14,7 @@
     { "name": "org/admin-web", "path": "~/src/admin-web" }
   ],
   "worktreeRoot": "~/.orch/worktrees",
-  "worker": { "command": "claude", "args": ["-p"], "timeoutMin": 30 },
+  "worker": { "command": "claude", "args": ["-p"], "promptVia": "arg", "timeoutMin": 30 },
 
   "wip": { "selfReview": 3, "memoReview": 3, "splitReview": 2 },
   "sizing": { "maxPrs": 10, "maxExamples": 5, "maxDepth": 3 },
@@ -65,7 +65,8 @@
 | `repos` | 監視対象。**必須**。`"org/repo"` でも `{ name, path }` でも書ける |
 | `repos[].path` | ローカルのチェックアウト先。ワーカーの起動に要る。**AIはcloneしない** |
 | `worktreeRoot` | worktree を作る場所。既定は `$ORCH_HOME/worktrees` |
-| `worker.command` / `args` | ワーカーの起動コマンド。既定は `claude -p` |
+| `worker.command` / `args` | ワーカーの起動コマンド。既定は `claude -p`。`args` の `{prompt}` の位置にプロンプトが入る（無ければ末尾） |
+| `worker.promptVia` | `arg`（既定）か `stdin`。ツール別の設定例は `topology.md` |
 | `worker.timeoutMin` | ワーカー1件の上限時間 |
 | `wip.*` | 行列ごとの上限。超えるとその行列を増やす処理が止まる |
 | `sizing.maxPrs` / `maxExamples` | 見積もりPR数 > maxPrs または 例 > maxExamples なら「大」 |
