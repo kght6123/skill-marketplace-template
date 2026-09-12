@@ -29,7 +29,7 @@ export function parkName(config) {
   return config?.stamps?.park || "hooray";
 }
 export function redoNames(config) {
-  return config?.stamps?.redo || ["-1", "laugh", "heart"];
+  return config?.stamps?.redo || ["-1", "confused", "heart"];
 }
 
 export function emojiFor(name) {

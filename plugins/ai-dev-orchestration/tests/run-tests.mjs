@@ -440,7 +440,7 @@ check("後回しが残っていれば parked のまま",
   json(["state", "get", "org/order-api#124"]).entry.status, "parked");
 
 // 割り当てを変えれば、そのリアクションで parked になる
-resetState({ stamps: { approve: "rocket", park: "eyes", redo: ["-1"] } });
+resetState({ stamps: { approve: "rocket", park: "eyes", redo: ["-1"] } }); // 割り当ては自由に変えられる
 run(["state", "set", "org/order-api#124", "--status", "memo-review"]);
 run(["sync"], { env: withGh({
   issueList: [],
@@ -463,6 +463,7 @@ check("既定では 👀 は無視される（別用途で使える）",
 
 const stampInfo = json(["stamps"]);
 check("スタンプの割り当てを出す", [stampInfo.approve.emoji, stampInfo.park.emoji], ["🚀", "🎉"]);
+check("作り直しは 👎😕❤️", stampInfo.redo.map((r) => r.emoji), ["👎", "😕", "❤️"]);
 check("フッタの文面を出す", stampInfo.footer, "🚀 着手OK ／ 🎉 後回し");
 
 // 4. sync はロックを持ったままGitHubを待たない

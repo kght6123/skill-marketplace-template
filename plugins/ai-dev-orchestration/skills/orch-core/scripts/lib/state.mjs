@@ -55,45 +55,54 @@ function holderIsAlive(pid) {
 export function withLock(fn, { timeoutMs = 10_000 } = {}) {
   fs.mkdirSync(ORCH_HOME, { recursive: true });
   const deadline = Date.now() + timeoutMs;
-  let fd = null;
-  for (;;) {
-    try {
-      fd = fs.openSync(LOCK_PATH, "wx");
-      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
-      break;
-    } catch (err) {
-      if (err.code !== "EEXIST") throw err;
-      // 直前に他プロセスがロックを外すことがあるので、その場合は取り直す
-      let raw = null;
-      let age = 0;
+  // 中身を書いてから link する。open(wx) → write の順だと、
+  // 書き込み前の空ファイルを別プロセスが「持ち主不明＝死んでいる」と読み、
+  // 生きているロックを奪ってしまう（二重取得 → 更新が消える）。
+  const staging = `${LOCK_PATH}.${process.pid}`;
+  fs.writeFileSync(staging, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
+
+  try {
+    for (;;) {
       try {
-        raw = fs.readFileSync(LOCK_PATH, "utf8");
-        age = Date.now() - fs.statSync(LOCK_PATH).mtimeMs;
-      } catch (readErr) {
-        if (readErr.code === "ENOENT") continue;
-        throw readErr;
+        fs.linkSync(staging, LOCK_PATH); // 存在すれば EEXIST。中身は最初から完全
+        break;
+      } catch (err) {
+        if (err.code !== "EEXIST") throw err;
+        let raw = null;
+        let age = 0;
+        try {
+          raw = fs.readFileSync(LOCK_PATH, "utf8");
+          age = Date.now() - fs.statSync(LOCK_PATH).mtimeMs;
+        } catch (readErr) {
+          if (readErr.code === "ENOENT") continue; // 直前に外れた。取り直す
+          throw readErr;
+        }
+        let pid = null;
+        try {
+          pid = JSON.parse(raw).pid;
+        } catch {
+          pid = null; // 旧形式や壊れたロック。持ち主は不明
+        }
+        // 持ち主が確かに死んでいれば即座に剥がす。
+        // 不明なときは奪わず、経過時間だけで判断する。
+        const dead = pid !== null && !holderIsAlive(pid);
+        if (dead || age > LOCK_STALE_MS) {
+          fs.rmSync(LOCK_PATH, { force: true });
+          continue;
+        }
+        if (Date.now() > deadline) {
+          throw new Error(`state.json のロックを取得できません（保持: pid ${pid ?? "不明"}）`);
+        }
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
       }
-      let pid = null;
-      try {
-        pid = JSON.parse(raw).pid;
-      } catch {
-        pid = null; // 旧形式や壊れたロック
-      }
-      // 持ち主が死んでいれば即座に、生きていても stale を超えたら剥がす
-      if (!holderIsAlive(pid) || age > LOCK_STALE_MS) {
-        fs.rmSync(LOCK_PATH, { force: true });
-        continue;
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`state.json のロックを取得できません（保持: pid ${pid}）`);
-      }
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
     }
+  } finally {
+    fs.rmSync(staging, { force: true });
   }
+
   try {
     return fn();
   } finally {
-    if (fd !== null) fs.closeSync(fd);
     fs.rmSync(LOCK_PATH, { force: true });
   }
 }

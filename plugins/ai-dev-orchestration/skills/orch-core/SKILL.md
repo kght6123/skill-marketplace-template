@@ -90,7 +90,7 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 
 - マネージャとワーカーの分担、リポジトリの場所、並行実行は `references/topology.md`
 - status の一覧と遷移は `references/state.md`
-- スタンプの割り当てと有効条件は `references/stamps.md`。既定は 🚀 承認 / 🎉 後回し / 👎😄❤️ 作り直しで、設定で変えられる
+- スタンプの割り当てと有効条件は `references/stamps.md`。既定は 🚀 承認 / 🎉 後回し / 👎😕❤️ 作り直しで、設定で変えられる
 - 仕様全体の見取り図は `references/spec.md`
 
 state.json を失った場合は `orch sync --rebuild` でコメントの目印（`<!-- ai-memo` など）から再構築する。
