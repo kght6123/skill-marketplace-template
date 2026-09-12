@@ -37,7 +37,7 @@ import { post } from "./lib/post.mjs";
 import { lintMemo, lintPr } from "./lib/lint.mjs";
 import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
-import { runWorker, parseEnvelope, applyEnvelope } from "./lib/worker.mjs";
+import { runWorker, parseEnvelope, applyEnvelope, postEnvelopeComments } from "./lib/worker.mjs";
 import { emojiFor, approveNames, parkNames, redoNames } from "./lib/stamps.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
@@ -331,9 +331,15 @@ async function main() {
       // ワーカーの結果エンベロープを state に反映する（マネージャ専用）
       const file = opts.file || positional[1];
       if (!file || !fs.existsSync(file)) return fail(`エンベロープのファイルがありません: ${file}`);
-      const envelope = parseEnvelope(fs.readFileSync(file, "utf8"));
+      const envelope = parseEnvelope(fs.readFileSync(file, "utf8"), {
+        key: typeof opts.key === "string" ? opts.key : undefined,
+        action: typeof opts.action === "string" ? opts.action : undefined,
+      });
       if (!envelope.ok) return needsHuman("エンベロープが不正", { errors: envelope.errors });
-      return emit({ command: "apply", ...applyEnvelope(envelope.data) });
+      const action = opts.action || envelope.data.action;
+      const applied = applyEnvelope(envelope.data, { action });
+      const posted = postEnvelopeComments(envelope.data);
+      return emit({ command: "apply", ...applied, posted });
     }
 
     case "merge-train": {

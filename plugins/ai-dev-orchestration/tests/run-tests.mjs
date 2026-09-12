@@ -503,6 +503,192 @@ const waited = Date.now() - startedAt;
 await new Promise((r) => slowSync.on("close", r));
 check("sync 中でも他プロセスが state を書ける（ロックを長く持たない）", waited < 1000, true);
 
+// --- ワーカーは事実だけを返す ----------------------------------------
+function workerCli(name, envelope) {
+  const file = path.join(home, `${name}.sh`);
+  fs.writeFileSync(file, ["#!/bin/sh", "cat <<JSON", "<<<ORCH_RESULT>>>", envelope, "<<<END>>>", "JSON"].join("\n"));
+  fs.chmodSync(file, 0o755);
+  return file;
+}
+function withWorker(cli, extra = {}) {
+  return {
+    repos: [{ name: "org/order-api", path: repoPath }],
+    worktreeRoot: path.join(home, "wt-guard"),
+    branchPrefix: "guard/",
+    worker: { command: cli, args: [] },
+    ...extra,
+  };
+}
+
+for (const [label, envelope, expect] of [
+  ["merged を返す", '{ "key": "org/order-api#125", "action": "implement", "prs": [{ "number": 60, "merged": true }] }', "prs[0].merged"],
+  ["selfApproved を返す", '{ "key": "org/order-api#125", "action": "implement", "prs": [{ "number": 60, "selfApproved": true }] }', "prs[0].selfApproved"],
+  ["approvalCommentId を返す", '{ "key": "org/order-api#125", "action": "implement", "prs": [{ "number": 60, "approvalCommentId": 9 }] }', "prs[0].approvalCommentId"],
+  ["done に飛ぶ", '{ "key": "org/order-api#125", "action": "implement", "status": "done" }', "done には遷移できない"],
+  ["知らない項目を足す", '{ "key": "org/order-api#125", "action": "implement", "mergeNow": true }', "知らない項目: mergeNow"],
+]) {
+  resetState(withWorker(workerCli(`w-${expect.replace(/\W/g, "")}`, envelope)));
+  const rejected = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile], { expectExit: 3 });
+  check(`ワーカーが ${label} → 拒否`, rejected.errors.some((e) => e.includes(expect)), true);
+}
+
+// 許された範囲なら通り、指摘対応の完了はマネージャが決める
+resetState(withWorker(workerCli("w-ok",
+  '{ "key": "org/order-api#125", "action": "implement", "status": "pr-review",\n' +
+  '  "prs": [{ "number": 60, "headSha": "aaa", "branch": "guard/125" }] }')));
+const okRun = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile]);
+check("観測した事実は反映される", okRun.applied.prs.map((p) => p.number), [60]);
+check("承認は勝手に立たない", okRun.applied.prs[0].selfApproved, false);
+
+// --- 承認用コメントはマネージャが投稿する ------------------------------
+resetState(withWorker(workerCli("w-comment",
+  '{ "key": "org/order-api#125", "action": "implement", "status": "pr-review",\n' +
+  '  "prs": [{ "number": 61, "headSha": "bbb" }],\n' +
+  '  "comments": [{ "kind": "approve", "pr": 61, "body": "<!-- ai-approve v1 -->\\nレビュー対象" }] }')));
+const withComment = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { env: withGh({ postedComment: { id: 777 } }) });
+check("エンベロープのコメントを投稿する", withComment.posted[0].commentId, 777);
+check("approvalCommentId を state に記録する",
+  json(["state", "get", "org/order-api#125"]).entry.prs[0].approvalCommentId, 777);
+
+// --- セルフレビュー未承認ではマージしない ------------------------------
+resetState();
+const greenThreads = { data: { repository: { pullRequest: { reviewThreads: {
+  nodes: [], pageInfo: { hasNextPage: false, endCursor: null },
+} } } } };
+const greenView = {
+  state: "OPEN", headRefOid: "abc123", reviewDecision: "APPROVED", mergeable: "MERGEABLE",
+  statusCheckRollup: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+  latestReviews: [{ state: "APPROVED", commit: { oid: "abc123" } }],
+};
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review",
+  prs: [{ number: 46, order: 1, headSha: "abc123", merged: false, selfApproved: false }],
+})]);
+const noSelf = json(["merge-train", "--dry-run"], { env: withGh({ prView: greenView, graphql: greenThreads }) });
+check("セルフレビュー未承認ならマージしない",
+  noSelf.results[0].reasons.some((r) => r.includes("セルフレビューが未承認")), true);
+
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  prs: [{ number: 46, order: 1, headSha: "abc123", merged: false, selfApproved: true, approvedSha: "old" }],
+})]);
+const staleSelf = json(["merge-train", "--dry-run"], { env: withGh({ prView: greenView, graphql: greenThreads }) });
+check("承認が古い head のものならマージしない",
+  staleSelf.results[0].reasons.some((r) => r.includes("現在の head ではない")), true);
+
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  prs: [{ number: 46, order: 1, headSha: "abc123", merged: false, selfApproved: true, approvedSha: "abc123" }],
+})]);
+const green = json(["merge-train", "--dry-run"], { env: withGh({ prView: greenView, graphql: greenThreads }) });
+check("すべて揃えばマージ対象になる", green.results[0].wouldMerge, true);
+
+// --- 片側だけ落ちたときに承認を有効扱いしない --------------------------
+resetState();
+run(["state", "set", "org/order-api#124", "--status", "memo-review"]);
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [],
+  commentFails: true, // 本文と更新日時が取れない
+  commentReactions: [{ content: "rocket", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
+}) });
+check("コメント本文が取れなければ承認を進めない",
+  json(["state", "get", "org/order-api#124"]).entry.status, "memo-review");
+
+// 取れるようになれば進む
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [],
+  comment: { id: 2345678902, body: "## 理解メモ", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [{ content: "rocket", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
+}) });
+check("取得できたら承認が通る", json(["state", "get", "org/order-api#124"]).entry.status, "ready");
+
+// --- parked は元の状態へ戻る ------------------------------------------
+resetState();
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [],
+  comment: { id: 2345678901, body: "承認用", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [{ content: "laugh", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
+}) });
+const parkedEntry = json(["state", "get", "org/order-api#123"]).entry;
+check("pr-review からでも後回しにできる", parkedEntry.status, "parked");
+check("元の状態を覚えている", parkedEntry.parkedFrom, "pr-review");
+
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [],
+  comment: { id: 2345678901, body: "承認用", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [],
+}) });
+check("後回しを外すと元の状態に戻る（sizing に巻き戻らない）",
+  json(["state", "get", "org/order-api#123"]).entry.status, "pr-review");
+
+// リアクションが取れないときは、外れたと判断しない
+run(["state", "set", "org/order-api#123", "--status", "parked", "--set", '{"parkedFrom":"pr-review"}']);
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactionsFail: true,
+  comment: { id: 2345678901, body: "承認用", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [],
+}) });
+check("確認できないうちは parked のまま",
+  json(["state", "get", "org/order-api#123"]).entry.status, "parked");
+
+// --- レビューコマンドが落ちたら pass にしない --------------------------
+resetState({ review: { maxRounds: 2, onError: "needs-human", steps: [{ id: "lint", command: "exit 1" }] } });
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review", prs: [{ number: 46, order: 1, headSha: "abc", merged: false }],
+})]);
+run(["review", "run", "--key", "org/order-api#123", "--pr", "46"]);
+const crashed = json(["review", "status", "--key", "org/order-api#123", "--pr", "46"], { expectExit: 3 });
+check("レビューが落ちたら pass にしない", crashed.decision, "needs-human");
+check("落ちた reviewer を挙げる", crashed.incomplete, ["lint"]);
+
+// onError: skip なら飛ばして続ける
+resetState({ review: { maxRounds: 2, onError: "skip", steps: [{ id: "lint", command: "exit 1" }] } });
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review", prs: [{ number: 46, order: 1, headSha: "abc", merged: false }],
+})]);
+run(["review", "run", "--key", "org/order-api#123", "--pr", "46"]);
+check("onError: skip なら続行する",
+  json(["review", "status", "--key", "org/order-api#123", "--pr", "46"]).decision, "pass");
+
+// --- 同時に始めた2ワーカーが同じ worktree に入らない --------------------
+const barrierCli = path.join(home, "barrier-cli.sh");
+fs.writeFileSync(barrierCli, [
+  "#!/bin/sh",
+  "sleep 1",
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "notes": "$(pwd)" }',
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(barrierCli, 0o755);
+resetState({
+  repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt-barrier"),
+  branchPrefix: "barrier/",
+  worker: { command: barrierCli, args: [], timeoutMin: 30 },
+});
+const together = await Promise.all([0, 0].map(() =>
+  new Promise((resolve) => {
+    const proc = spawn("node", [orch, "worker", "--key", "org/order-api#125", "--prompt", promptFile], {
+      stdio: ["ignore", "pipe", "ignore"],
+      env: { ...process.env, ORCH_HOME: home },
+    });
+    let out = "";
+    proc.stdout.on("data", (d) => (out += d));
+    proc.on("close", () => resolve(JSON.parse(out)));
+  })));
+check("同時に始めても同じ worktree に入らない",
+  new Set(together.map((r) => r.cwd)).size, 2);
+
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} 件が失敗` : "\nすべて成功");
 process.exit(failed ? 1 : 0);

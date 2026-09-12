@@ -60,13 +60,22 @@ export function post({ key, kind, bodyFile, pr, update }) {
   const { nameWithOwner, number } = parseKey(key);
   const target = pr ? Number(pr) : number;
 
+  // 更新するコメントは kind ごとに違う。memo/split は entry、
+  // approve/triage は対象PRのもの。ここを取り違えると別のコメントを書き換える。
+  const snapshotPr = (snapshot.prs || []).find((p) => p.number === Number(pr));
+  const existingId = {
+    memo: snapshot.commentId,
+    split: snapshot.commentId,
+    approve: snapshotPr?.approvalCommentId,
+    triage: snapshotPr?.triageCommentId,
+  }[kind];
+
   let result;
-  if (update && snapshot.commentId) {
-    result = updateComment(nameWithOwner, snapshot.commentId, bodyFile);
+  if (update) {
+    if (!existingId) throw new Error(`--update の対象コメントが state に無い（kind: ${kind}）`);
+    result = updateComment(nameWithOwner, existingId, bodyFile);
   } else {
-    if (snapshot.commentId && ["memo", "split"].includes(kind)) {
-      collapse(nameWithOwner, snapshot.commentId);
-    }
+    if (existingId && ["memo", "split"].includes(kind)) collapse(nameWithOwner, existingId);
     result = postComment(nameWithOwner, target, bodyFile);
   }
 

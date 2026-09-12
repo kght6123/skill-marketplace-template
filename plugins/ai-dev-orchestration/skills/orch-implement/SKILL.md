@@ -104,6 +104,10 @@ node "$ORCH" state set <key> --set '{"prs":[{"number":46,"order":2,"headSha":"..
 
 最後に必ずこれを標準出力へ出す。これが無いとマネージャは結果を反映できない。
 
+**返してよいのは観測した事実だけ。** `merged` `selfApproved` `approvalCommentId` `approvedSha`
+`triageApproved` `triageApplied` はマネージャ管轄で、入れるとエンベロープごと拒否される。
+`status` も action ごとの許可リスト内（実装なら `implementing` / `pr-review` / `needs-human`）だけ。
+
 ```
 <<<ORCH_RESULT>>>
 {
@@ -125,7 +129,7 @@ node "$ORCH" state set <key> --set '{"prs":[{"number":46,"order":2,"headSha":"..
 
 - 修正してプッシュすると承認は無効になる。新しい承認用コメントを投稿し、旧を折りたたむ
 - セルフレビューの対象は、前回承認したSHA（`approvedSha`）からの差分だけ
-- 対応が終わったらエンベロープの `prs` に `"triageApplied": true` を入れて返す
+- 対応が終わったことは申告しない。`action: apply-triage` が成功した事実からマネージャが記録する
 
 ## 競合
 

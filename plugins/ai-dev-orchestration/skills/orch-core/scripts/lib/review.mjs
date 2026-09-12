@@ -70,7 +70,11 @@ export function run(config, { key, pr: prNumber, changedFiles = [] }) {
     const { pr } = prRecord(state, key, prNumber);
     pr.review.round += 1;
     Object.assign(pr.review.results, collected);
-    return { round: pr.review.round, executed, pending };
+    // どの step を回すはずだったか、どれが失敗したかを残す。
+    // 失敗を「指摘ゼロ」と同じ扱いにしないための材料。
+    pr.review.expected = [...executed.map((e) => e.id), ...pending.map((p) => p.id)];
+    pr.review.errors = executed.filter((e) => !e.ok).map((e) => ({ id: e.id, errors: e.errors }));
+    return { round: pr.review.round, executed, pending, expected: pr.review.expected };
   });
 }
 
@@ -95,19 +99,32 @@ export function status(config, { key, pr: prNumber }) {
   const blocking = all.filter((f) => f.severity === "block");
   const round = pr.review?.round || 0;
 
+  // 実行できなかった step と、結果が返っていない step。
+  // レビューが落ちたのに「指摘ゼロ」で通す方が、block を見逃すより危ない。
+  const failed = pr.review?.errors || [];
+  const expected = pr.review?.expected || [];
+  const missing = expected.filter((id) => !(id in (pr.review?.results || {})));
+  const incomplete = [...new Set([...failed.map((f) => f.id), ...missing])];
+
   let decision = "pass";
   if (blocking.length) {
     decision = round >= config.review.maxRounds ? "needs-human" : "fix";
+  }
+  if (incomplete.length && config.review.onError === "needs-human") {
+    // onError: "skip" なら、落ちた step を飛ばして判定を続ける
+    decision = "needs-human";
   }
   if (decision === "needs-human") {
     updateState((fresh) => {
       const entry = fresh.issues[key];
       entry.status = "needs-human";
       entry.unresolvedFindings = blocking;
+      entry.incompleteReviewers = incomplete;
     });
   }
   return {
     decision,
+    incomplete,
     round,
     maxRounds: config.review.maxRounds,
     blocking,

@@ -201,6 +201,27 @@ node "$ORCH" apply --file /tmp/worker-output.txt
 <<<END>>>
 ```
 
+**返してよいのは観測した事実だけ。** マネージャは受け取った値をそのまま信じない。
+
+| 項目 | ワーカー | マネージャ |
+|---|---|---|
+| `prs[].number` `order` `headSha` `branch` `base` `title` | ✓ | |
+| `merged` `selfApproved` `approvalCommentId` `approvedSha` `triageApproved` `triageApplied` | | ✓ |
+| `status` | action ごとの許可リスト内だけ | |
+| `review` `comments` `notes` `needs_human` | ✓ | |
+
+`status` の許可リストは action で決まる。
+
+| action | 遷移できる先 |
+|---|---|
+| `implement` / `implement-continue` | `implementing` `pr-review` `needs-human` |
+| `apply-triage` | `pr-review` `needs-human` |
+
+範囲外の項目や遷移が入っていたら、**黙って捨てずにエンベロープごと拒否**して
+needs-human にする。ワーカーが仕様を誤解したまま進むのを止めるため。
+指摘対応が終わったかどうか（`triageApplied`）は、ワーカーの自己申告ではなく
+action と実行結果からマネージャが決める。
+
 `comments` は「マネージャに投稿してほしいコメント」。ワーカーは投稿できないので、本文だけを返す。
 マネージャは `orch post --key … --kind approve --pr 50 --body <bodyFile>` で投稿する。
 

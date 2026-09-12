@@ -47,13 +47,15 @@ export function ghWrite(args, { intent } = {}) {
 
 // リアクション（スタンプ）の取得。Issue本文・コメントの両方に使う。
 // kind: "issue" | "comment"
+// 取得できなければ null を返す。空配列（＝リアクション無し）と混同しないこと。
+// 混同すると「スタンプが外れた」と誤読し、止めていたものが動き出す。
 export function fetchReactions(nameWithOwner, kind, id) {
   const p = kind === "issue" ? `issues/${id}` : `issues/comments/${id}`;
   const out = ghJson(
     ["api", `repos/${nameWithOwner}/${p}/reactions`, "--paginate"],
     { allowFail: true },
   );
-  return out || [];
+  return Array.isArray(out) ? out : null;
 }
 
 // GitHub のリアクション名 → 表示用の絵文字。8種類すべて。

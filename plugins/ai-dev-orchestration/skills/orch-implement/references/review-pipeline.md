@@ -65,6 +65,11 @@ node "$ORCH" review status --key <key> --pr <pr>
 |---|---|---|
 | `pass` | block なし | PR作成へ進む |
 | `fix` | block あり、round < maxRounds | 直して `memo-check` と指摘元だけ再実行 |
-| `needs-human` | block あり、round >= maxRounds | 止める。残った block は PR 先頭に「未解決の指摘」として載せる |
+| `needs-human` | block あり round超過、または**回せなかった step がある** | 止める。残った block は PR 先頭に「未解決の指摘」として載せる |
+
+レビューコマンドが落ちた、結果のJSONが壊れていた、結果が返っていない。
+いずれも「指摘ゼロ」とは違う。`onError: "needs-human"`（既定）ならそこで止める。
+落ちたレビューを通過扱いにすると、security review がクラッシュしても素通りする。
+飛ばして進めたいときだけ `onError: "skip"` にする。
 
 `warn` / `info` は捨てない。PR本文の折りたたみに全件記載する。

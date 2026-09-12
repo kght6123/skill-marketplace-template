@@ -127,7 +127,7 @@ node "$ORCH" profile --human             # 今どれで動いているか
 | `limits.implementPerBuild` | build 1回で実装する件数 |
 | `limits.parallelWorkers` | 同時に起動するワーカーの数（既定12）。同じIssueに割り当てる worktree の連番の上限でもある |
 | `review.maxRounds` | block の修正を試す回数。超えたら needs-human |
-| `review.onError` | レビュー結果が不正だったとき。`needs-human` か `skip` |
+| `review.onError` | レビューが落ちた・結果が不正・結果が返らなかったとき。`needs-human`（既定、止める）か `skip`（飛ばす） |
 | `review.steps[].skill\|subagent\|command\|builtin` | 指定方法は4種類。`skill` / `subagent` はAIが実行し `orch review record` で結果を渡す |
 | `review.steps[].when.paths` | 変更ファイルがマッチしたときだけ実行 |
 | `merge.method` | `merge`（マージコミット）を推奨 |

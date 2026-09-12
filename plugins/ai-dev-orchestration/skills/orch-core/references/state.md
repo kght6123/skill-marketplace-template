@@ -20,6 +20,8 @@
       "title": "期間指定API",
       "milestoneDue": "2026-09-30",
       "enteredStatusAt": "2026-09-12T01:00:00.000Z",
+      "parkedFrom": null,
+      "parkedBy": null,
       "sizing": { "estimatedPrs": 3, "examples": 3 },
       "prs": [
         { "number": 46, "order": 2, "headSha": "def5678",
@@ -46,7 +48,7 @@
 | implementing | 実装中 | |
 | pr-review | セルフ／レビュアー待ち | ✓ |
 | needs-human | 自動で進めない | ✓ |
-| parked | 後回しスタンプ（既定😄） | |
+| parked | 後回しスタンプ（既定😄）。一時停止レイヤー | |
 | done | 完了 | |
 
 `candidate` だけは仕様の表に無い。並び順7を出すために追加した。
@@ -56,7 +58,7 @@
 | きっかけ | 遷移 |
 |---|---|
 | Issue本文に有効な承認スタンプ | candidate → sizing |
-| 後回しが外れて承認スタンプ | parked → sizing |
+
 | 規模判定が小 → メモ投稿（確認事項あり） | sizing → waiting-answer |
 | 規模判定が小 → メモ投稿（確認事項なし） | sizing → memo-review |
 | 規模判定が大・深さ<3 → 分割案投稿 | sizing → split-review |
@@ -66,8 +68,19 @@
 | 全Sub Issueがdone | split-done → done |
 | PR作成 | ready/implementing → pr-review |
 | 全PRがマージ済み | pr-review → done |
-| 後回しスタンプ | any → parked |
+| 後回しスタンプ | any → parked（元の status を `parkedFrom` に保存） |
+| 後回しが外れた | parked → `parkedFrom`（元の状態へ戻す） |
 | レビューの block が maxRounds 超過 | any → needs-human |
+
+## parked は一時停止
+
+後回しは通常の業務状態ではなく、どの status からでも掛けられる一時停止。
+掛けたときの status を `parkedFrom` に、どの面（本文かコメントか）で押されたかを
+`parkedBy` に残す。外れたら `parkedFrom` へ戻す。
+
+戻り先を覚えていないと、pr-review で止めたものが sizing まで巻き戻る。
+また「外れた」と判断するのは、本文とコメントの両方を確認できたときだけ。
+取得に失敗した状態で外れたと見なすと、止めていたものが勝手に動き出す。
 
 ## 書き込みのロック
 

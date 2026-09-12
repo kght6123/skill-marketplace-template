@@ -51,15 +51,21 @@ if (args[0] === "api" && joined.includes("graphql")) {
   if (scenario.graphql === "fail") boom("GraphQL: Something went wrong");
   out(scenario.graphql ?? { data: {} });
 }
-if (args[0] === "api" && /issues\/\d+\/reactions/.test(joined)) out(scenario.issueReactions ?? []);
+if (args[0] === "api" && /issues\/\d+\/reactions/.test(joined)) {
+  if (scenario.issueReactionsFail) boom("HTTP 502");
+  out(scenario.issueReactions ?? []);
+}
 if (args[0] === "api" && /issues\/comments\/\d+\/reactions/.test(joined)) {
   out(scenario.commentReactions ?? []);
 }
 if (args[0] === "api" && /issues\/comments\/\d+$/.test(joined.split(" ").pop() || "")) {
+  // コメント本文だけ落ちる状況（リアクションは取れる）を作れるようにする
+  if (scenario.commentFails) boom("HTTP 502");
   out(scenario.comment ?? { id: 1, body: "", updated_at: "2026-09-12T00:00:00Z" });
 }
 if (args[0] === "api" && /issues\/\d+\/comments/.test(joined)) out(scenario.postedComment ?? { id: 555 });
 if (args[0] === "api" && /issues\/comments\/\d+/.test(joined)) {
+  if (scenario.commentFails) boom("HTTP 502");
   out(scenario.comment ?? { id: 1, body: "", updated_at: "2026-09-12T00:00:00Z" });
 }
 

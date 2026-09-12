@@ -52,6 +52,11 @@ export function evaluate(entry, pr) {
   if (view.state === "MERGED") return { mergeable: false, merged: true, reasons: ["マージ済み"] };
 
   const reasons = [];
+  // セルフレビューの承認が先。他エンジニアが先に Approve しても、ここを飛ばさない
+  if (!pr.selfApproved) reasons.push("セルフレビューが未承認（承認用コメントにスタンプが無い）");
+  else if (pr.approvedSha !== view.headRefOid) {
+    reasons.push(`セルフレビューの承認が現在の head ではない（承認: ${pr.approvedSha || "なし"}）`);
+  }
   if (view.reviewDecision !== "APPROVED") reasons.push(`reviewDecision が ${view.reviewDecision || "未設定"}`);
   if (view.mergeable !== "MERGEABLE") reasons.push(`mergeable が ${view.mergeable}`);
 

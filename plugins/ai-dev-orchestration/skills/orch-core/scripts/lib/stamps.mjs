@@ -8,8 +8,10 @@
 // ここではリアクション名（rocket / hooray / …）で扱い、絵文字は表示だけに使う。
 import { EMOJI } from "./gh.mjs";
 
-// 自分が押したリアクションだけを { rocket: {createdAt}, ... } にまとめる
+// 自分が押したリアクションだけを { rocket: {createdAt}, ... } にまとめる。
+// reactions が null（取得できなかった）なら null を返す。
 export function ownStamps(reactions, account) {
+  if (!Array.isArray(reactions)) return null;
   const out = {};
   for (const r of reactions || []) {
     const login = r.user?.login;
