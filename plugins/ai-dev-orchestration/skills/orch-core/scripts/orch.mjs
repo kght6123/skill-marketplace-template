@@ -5,6 +5,7 @@
 // 判定（状態遷移・WIP・並び順・マージ可否・lint）はすべてここで完結し、AI は再計算しない。
 //
 //   orch init
+//   orch profile [--human]                  今のプロファイル（プラン別のモデルと並行度）
 //   orch sync [--dry-run] [--rebuild]
 //   orch queue [--human]
 //   orch next [--mode memo|build] [--minutes N] [--project org/repo] [--human]
@@ -16,6 +17,8 @@
 //   orch apply --file result.json
 //   orch merge-train [--dry-run]
 //   orch conflict --files a.ts,b.ts
+//
+// すべてのコマンドで --profile <名前> が使える（ORCH_PROFILE より優先）。
 //
 // マネージャとワーカーの境界: ORCH_ROLE=worker のセッションでは、state を書く
 // コマンドをこの CLI 自身が拒否する。ワーカーは結果をエンベロープで返し、
@@ -37,6 +40,8 @@ import { runWorker, parseEnvelope, applyEnvelope } from "./lib/worker.mjs";
 const { opts, positional } = parseArgs(process.argv.slice(2));
 const command = positional[0];
 const human = Boolean(opts.human);
+// --profile は環境変数より優先。設定を読む前に反映する
+if (typeof opts.profile === "string") process.env.ORCH_PROFILE = opts.profile;
 setDryRun(opts["dry-run"]);
 
 // ワーカーに実行させないコマンド（state を書くもの）
@@ -200,6 +205,39 @@ async function main() {
         return emit({ command: "review status", ...result });
       }
       return fail("review の後に run / record / status を指定してください");
+    }
+
+    case "profile": {
+      // 今どのプロファイルで動いているか。マネージャの起動コマンドも出す。
+      const list = Object.entries(config.profiles || {}).map(([name, p]) => ({
+        name,
+        managerModel: p.manager?.model ?? null,
+        workerModel: p.worker?.model ?? null,
+        parallelWorkers: p.limits?.parallelWorkers ?? null,
+      }));
+      return emit(
+        {
+          command: "profile",
+          active: config._profile,
+          managerModel: config.manager?.model || "default",
+          workerModel: config.worker?.model || null,
+          parallelWorkers: config.limits?.parallelWorkers,
+          startManager: `claude --model ${config.manager?.model || "default"}`,
+          profiles: list,
+        },
+        {
+          human,
+          render: (b) =>
+            [
+              ` プロファイル: ${b.active || "（未指定）"}`,
+              ` マネージャ: ${b.managerModel}   ワーカー: ${b.workerModel || "（未指定）"}   並行: ${b.parallelWorkers}`,
+              "",
+              ` マネージャの起動: ${b.startManager}`,
+              "",
+              ...b.profiles.map((p) => `   ${p.name.padEnd(8)} マネージャ ${p.managerModel} / ワーカー ${p.workerModel} / 並行 ${p.parallelWorkers}`),
+            ].join("\n"),
+        },
+      );
     }
 
     case "worker": {

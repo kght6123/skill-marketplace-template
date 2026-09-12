@@ -78,13 +78,19 @@ export function ensureWorktree(config, key, { lock = false } = {}) {
       const args = exists
         ? ["-C", repoPath, "worktree", "add", dir, branch]
         : ["-C", repoPath, "worktree", "add", "-b", branch, dir];
-      execFileSync("git", args, git);
+      try {
+        execFileSync("git", args, git);
+      } catch (err) {
+        // そのブランチが別の場所で既に checked out なら、次の連番を試す
+        if (/already used by worktree|already checked out/.test(String(err.stderr || ""))) continue;
+        throw err;
+      }
     }
     if (lock) fs.writeFileSync(path.join(dir, LOCK_NAME), `${process.pid} ${new Date().toISOString()}\n`);
     return { dir, branch, slot, repoPath };
   }
   throw new Error(
-    `${key} のワーカーが ${maxSlots} 本すべて動いています（limits.parallelWorkers）`,
+    `${key} の worktree が ${maxSlots} 枠すべて使用中です（実行中か、別の場所で checked out）。limits.parallelWorkers を見てください`,
   );
 }
 

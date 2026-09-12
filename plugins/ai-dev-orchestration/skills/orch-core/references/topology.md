@@ -108,20 +108,55 @@ state.json を書くのはマネージャだけなので、ワーカーを並行
 理解メモが長かったり的外れだと、人間の読む量が増えて元の問題に戻る。ここをケチらない。
 逆にワーカーは「メモに書いてあることを実装する」だけなので、安いモデルで足りる。
 
-ワーカーのモデルは設定で渡す。
+ワーカーのモデルは設定で渡す。マネージャのモデルは設定では決められないので、
+**人間が起動するときに指定する。**
 
 ```json
-{ "worker": { "command": "claude", "args": ["-p"], "model": "claude-sonnet-5" } }
+{ "worker": { "command": "claude", "args": ["-p"], "model": "sonnet" } }
 ```
-
-マネージャのモデルは設定では決められない。**人間が起動するときに指定する。**
 
 ```bash
-claude --model claude-opus-5      # マネージャのセッション
+claude --model opus      # マネージャのセッション
 ```
 
-`opus` `sonnet` のような短い別名も使える。Codex CLI / Copilot CLI も `--model` を持つので、
-`modelFlag` を変えれば同じ形で渡せる。
+モデルIDを直接書いてもよいが（`claude-opus-5` / `claude-sonnet-5` / `claude-haiku-4-5`）、
+**別名（`opus` / `sonnet` / `haiku` / `default`）を推奨する。** 世代が上がっても追随するのと、
+`default` はプランで解決先が変わるため。
+
+### プランで切り替える
+
+Claude Code の `default` は契約で解決先が変わる。
+
+| プラン | `default` の解決先 |
+|---|---|
+| Max / Team Premium / Enterprise / API | Opus 5 |
+| Pro / Team Standard | Sonnet 5 |
+
+つまり Pro でマネージャに `opus` を固定すると、使用量をすぐ使い切る。並行ワーカーを12本も回せば
+なおさら。プランごとにプロファイルを切り替える。
+
+```json
+{
+  "profile": "pro",
+  "profiles": {
+    "pro": { "manager": { "model": "default" }, "worker": { "model": "haiku" },
+             "limits": { "parallelWorkers": 2 } },
+    "max": { "manager": { "model": "opus" },     "worker": { "model": "sonnet" },
+             "limits": { "parallelWorkers": 12 } }
+  }
+}
+```
+
+```bash
+node "$ORCH" profile --human              # 今のプロファイルとマネージャの起動コマンド
+node "$ORCH" worker --profile max ...     # コマンドごとに切り替え
+ORCH_PROFILE=max node "$ORCH" ...         # シェルごとに切り替え
+```
+
+プロファイルは設定全体に上書きで効くので、`wip` の上限もプランごとに変えられる。
+仕事とプライベートでマシンが分かれているなら、`orch.config.json` の `profile` に書いておけばよい。
+
+Codex CLI / Copilot CLI も `--model` を持つので、`modelFlag` を変えれば同じ形で渡せる。
 
 `promptVia: "stdin"` にするとプロンプトを標準入力から渡す。既定では**標準入力は閉じて**起動する。
 開いたままだと EOF を待って止まるCLIがあるため（`codex exec` に既知の問題がある）。

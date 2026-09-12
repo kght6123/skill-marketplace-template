@@ -23,7 +23,10 @@ argument-hint: [init|status|config] [--repo org/repo]
 Claude Code 固有の機能は使わない。ワーカーのCLIは差し替えられる（Codex CLI / Copilot CLI など）。
 
 モデルは分けるとよい。**マネージャは良いモデル**（理解メモの質がこの仕組みの要）、
-**ワーカーは安いモデル**（承認済みのメモどおりに実装するだけ）。詳しくは `references/topology.md`。
+**ワーカーは安いモデル**（承認済みのメモどおりに実装するだけ）。
+プラン（Pro / Max）で使えるモデルと回せる量が違うので、プロファイルで切り替える。
+`node "$ORCH" profile --human` で今の設定とマネージャの起動コマンドが出る。
+詳しくは `references/topology.md`。
 
 ---
 
@@ -74,6 +77,7 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 | `orch lint memo\|pr <file>` | 生成物の上限検査。exit 2 なら作り直し |
 | `orch review run\|record\|status` | AIレビューのpipeline |
 | `orch merge-train` | マージ条件の判定とマージ |
+| `orch profile` | 今のプロファイル（プラン別のモデル・並行度）とマネージャの起動コマンド |
 | `orch worker --key K --action A --prompt f` | 各リポジトリの worktree でワーカーを起動する |
 | `orch apply --file f` | ワーカーの結果エンベロープを state に反映する |
 | `orch conflict --files a,b` | 競合を自動解決とhuman確認に分類 |

@@ -113,6 +113,18 @@ check("重要パスは人間に回す", conflict.human.map((h) => h.file), ["src
 check("ロックファイルは再生成", conflict.auto.map((a) => a.file), ["pnpm-lock.yaml"]);
 check("needs_human を立てる", conflict.needs_human, true);
 
+// --- プロファイル（プラン別の切り替え）--------------------------------
+resetState({ profile: "pro" });
+const pro = json(["profile"]);
+check("設定の profile が効く", [pro.active, pro.workerModel, pro.parallelWorkers], ["pro", "haiku", 2]);
+check("マネージャの起動コマンドを出す", pro.startManager, "claude --model default");
+const max = json(["profile", "--profile", "max"]);
+check("--profile が設定より優先される", [max.active, max.workerModel, max.parallelWorkers], ["max", "sonnet", 12]);
+check("ORCH_PROFILE でも切り替わる",
+  json(["profile"], { env: { ORCH_PROFILE: "max" } }).workerModel, "sonnet");
+check("知らないプロファイルは止まる",
+  json(["profile", "--profile", "team"], { expectExit: 1 }).ok, false);
+
 // --- マネージャとワーカーの境界 ---------------------------------------
 resetState();
 check("ワーカーは state を書けない",

@@ -10,6 +10,27 @@ export const ORCH_HOME =
 export const DEFAULT_CONFIG = {
   // 自分のアカウント。スタンプの押し主判定に使う（他人の同じスタンプには反応しない）
   account: null,
+
+  // 使うプロファイル。ORCH_PROFILE か --profile が優先。
+  // プランによってモデルと並行度を変えるための仕組み。
+  profile: null,
+  profiles: {
+    pro: {
+      // Pro は default が Sonnet 5。Opus は使用量を食うので並行度も落とす
+      manager: { model: "default" },
+      worker: { model: "haiku" },
+      limits: { parallelWorkers: 2 },
+    },
+    max: {
+      // Max は default が Opus 5
+      manager: { model: "opus" },
+      worker: { model: "sonnet" },
+      limits: { parallelWorkers: 12 },
+    },
+  },
+
+  // マネージャのモデル。設定では変えられないので、起動時の指定に使う目安
+  manager: { model: "default" },
   // 監視対象リポジトリ。"org/repo" か { name, path } で書く。
   // path はローカルのチェックアウト。ワーカーを起動するのに要る（AIはcloneしない）。
   repos: [],
@@ -86,7 +107,15 @@ export async function loadConfig() {
   } else {
     parsed = JSON.parse(raw);
   }
-  return { ...deepMerge(DEFAULT_CONFIG, parsed || {}), _path: file, _exists: true };
+  const merged = deepMerge(DEFAULT_CONFIG, parsed || {});
+  const name = process.env.ORCH_PROFILE || merged.profile || null;
+  if (name && !merged.profiles?.[name]) {
+    throw new Error(
+      `profiles に "${name}" がありません（${Object.keys(merged.profiles || {}).join(" / ") || "未定義"}）`,
+    );
+  }
+  const final = name ? deepMerge(merged, merged.profiles[name]) : merged;
+  return { ...final, _profile: name, _path: file, _exists: true };
 }
 
 // repos は "org/repo" でも { name, path } でも書ける。内部では後者に揃える。

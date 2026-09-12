@@ -1,6 +1,7 @@
 orch — AI開発オーケストレーションの決定的な処理
 
   orch init                                        $ORCH_HOME を作り、設定の雛形を置く
+  orch profile [--human]                           今のプロファイル（プラン別のモデル・並行度）
   orch sync [--dry-run] [--rebuild]                GitHub差分とスタンプを読み、状態を遷移させる
   orch queue [--human]                             行列の件数とWIP上限の空き
   orch next [--mode memo|build] [--minutes N]      次の1件（--mode はAI用、無指定は人間用）
@@ -16,3 +17,4 @@ orch — AI開発オーケストレーションの決定的な処理
 終了コード: 0 正常 / 1 エラー / 2 lint違反（作り直し） / 3 needs_human（AIはここで止まる）
 
 マネージャ専用: sync / post / merge-train / worker / apply / state set / review（ORCH_ROLE=worker では拒否）
+すべてのコマンドで --profile <名前>（または ORCH_PROFILE）が使える
