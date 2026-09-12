@@ -26,10 +26,11 @@ export const DEFAULT_CONFIG = {
   // どのリアクションをどの意味に使うか。GitHub で普段使っている絵文字と
   // ぶつかるなら、ここを変える。使えるのは GitHub の8種類:
   //   rocket / hooray / eyes / +1 / -1 / laugh / confused / heart
+  // それぞれ1つでも配列でも書ける。同じ意味に複数のリアクションを割り当ててよい。
   stamps: {
-    approve: "rocket", // 承認・着手OK
-    park: "laugh",     // 後回し（parked）
-    redo: ["-1", "confused", "eyes"], // 作り直し
+    approve: ["rocket", "+1", "heart"], // 承認・着手OK
+    park: ["laugh"],                    // 後回し（parked）
+    redo: ["-1", "confused", "eyes"],   // 作り直し
   },
 
   // 段階的に導入するための段。AIはこれを人に確認しない。設定に従うだけ。

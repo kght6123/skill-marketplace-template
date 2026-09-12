@@ -22,30 +22,52 @@ export function ownStamps(reactions, account) {
   return out;
 }
 
-export function approveName(config) {
-  return config?.stamps?.approve || "rocket";
+// 1つでも配列でも書ける。["rocket", "+1", "heart"] のように複数を同じ意味に割り当てられる。
+function toList(value, fallback) {
+  if (Array.isArray(value)) return value.filter(Boolean);
+  if (typeof value === "string" && value) return [value];
+  return fallback;
 }
-export function parkName(config) {
-  return config?.stamps?.park || "laugh";
+
+export function approveNames(config) {
+  return toList(config?.stamps?.approve, ["rocket"]);
+}
+export function parkNames(config) {
+  return toList(config?.stamps?.park, ["laugh"]);
 }
 export function redoNames(config) {
-  return config?.stamps?.redo || ["-1", "confused", "eyes"];
+  return toList(config?.stamps?.redo, ["-1", "confused", "eyes"]);
 }
 
 export function emojiFor(name) {
   return EMOJI[name] || name;
 }
+export function emojisFor(names) {
+  return names.map(emojiFor).join("");
+}
 
-// 承認スタンプが有効か。targetUpdatedAt は押した対象（コメント or Issue本文）の更新日時。
+// 押された承認スタンプのうち、有効なものの名前。無ければ null。
+// targetUpdatedAt は押した対象（コメント or Issue本文）の更新日時。
+export function matchedApprove(stamps, targetUpdatedAt, config) {
+  for (const name of approveNames(config)) {
+    const stamp = stamps[name];
+    if (!stamp) continue;
+    if (!targetUpdatedAt || new Date(stamp.createdAt) > new Date(targetUpdatedAt)) return name;
+  }
+  return null;
+}
+
 export function approveIsValid(stamps, targetUpdatedAt, config) {
-  const stamp = stamps[approveName(config)];
-  if (!stamp) return false;
-  if (!targetUpdatedAt) return true;
-  return new Date(stamp.createdAt) > new Date(targetUpdatedAt);
+  return matchedApprove(stamps, targetUpdatedAt, config) !== null;
+}
+
+// 押された後回しスタンプの名前。無ければ null。
+export function matchedPark(stamps, config) {
+  return parkNames(config).find((n) => stamps[n]) || null;
 }
 
 export function isParked(stamps, config) {
-  return Boolean(stamps[parkName(config)]);
+  return matchedPark(stamps, config) !== null;
 }
 
 // 作り直しを求めるスタンプ。押されていれば絵文字を返す。

@@ -10,7 +10,7 @@
 import { ghJson, fetchReactions } from "./gh.mjs";
 import { repoNames } from "./config.mjs";
 import { loadState, updateState, newEntry, setStatus, parseKey } from "./state.mjs";
-import { ownStamps, approveIsValid, isParked, redoStamp, emojiFor, parkName, approveName, allQuestionsAnswered } from "./stamps.mjs";
+import { ownStamps, matchedApprove, matchedPark, isParked, redoStamp, emojiFor, emojisFor, parkNames, approveNames, allQuestionsAnswered } from "./stamps.mjs";
 import { sizeOf } from "./next.mjs";
 
 const MARKERS = {
@@ -103,16 +103,18 @@ export function collectFacts(config, snapshot) {
 function applyBodyStamps(entry, config, f, transitions) {
   if (!["candidate", "parked"].includes(entry.status)) return;
   const stamps = ownStamps(f.issueReactions, config.account);
-  const park = emojiFor(parkName(config));
-  const approve = emojiFor(approveName(config));
-  if (isParked(stamps, config)) {
+  const parked = matchedPark(stamps, config);
+  if (parked) {
     if (entry.status !== "parked") {
-      transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: park });
+      transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: emojiFor(parked) });
       setStatus(entry, "parked");
     }
     return;
   }
-  if (approveIsValid(stamps, f.issue?.updatedAt, config)) {
+  const matched = matchedApprove(stamps, f.issue?.updatedAt, config);
+  if (matched) {
+    const approve = emojiFor(matched);
+    const park = emojisFor(parkNames(config));
     // 後回しが外れて承認が有効なら、parked からでも動き出す
     transitions.push({
       key: entry.key, from: entry.status, to: "sizing",
@@ -128,10 +130,10 @@ function applyCommentStamps(entry, config, f, transitions) {
     const c = f.comment;
     const stamps = ownStamps(f.commentReactions, config.account);
     const redo = redoStamp(stamps, config);
-    const approve = emojiFor(approveName(config));
+    const parkedHere = matchedPark(stamps, config);
 
-    if (isParked(stamps, config) && entry.status !== "parked") {
-      transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: emojiFor(parkName(config)) });
+    if (parkedHere && entry.status !== "parked") {
+      transitions.push({ key: entry.key, from: entry.status, to: "parked", reason: emojiFor(parkedHere) });
       setStatus(entry, "parked");
       return;
     }
@@ -139,8 +141,9 @@ function applyCommentStamps(entry, config, f, transitions) {
 
     if (entry.status === "memo-review" && !redo) {
       // 承認は「コメント更新より後」かつ「確認事項がすべてチェック済み」のときだけ有効
-      if (approveIsValid(stamps, c?.updated_at, config) && allQuestionsAnswered(c?.body || "")) {
-        transitions.push({ key: entry.key, from: entry.status, to: "ready", reason: `メモに${approve}` });
+      const ok = matchedApprove(stamps, c?.updated_at, config);
+      if (ok && allQuestionsAnswered(c?.body || "")) {
+        transitions.push({ key: entry.key, from: entry.status, to: "ready", reason: `メモに${emojiFor(ok)}` });
         setStatus(entry, "ready", { redo: null });
       }
     }
@@ -148,8 +151,9 @@ function applyCommentStamps(entry, config, f, transitions) {
       entry.answersReady = true;
     }
     if (entry.status === "split-review" && !redo) {
-      if (approveIsValid(stamps, c?.updated_at, config)) {
-        transitions.push({ key: entry.key, from: entry.status, to: "split-done", reason: `分割案に${approve}` });
+      const ok = matchedApprove(stamps, c?.updated_at, config);
+      if (ok) {
+        transitions.push({ key: entry.key, from: entry.status, to: "split-done", reason: `分割案に${emojiFor(ok)}` });
         setStatus(entry, "split-done", { redo: null, childrenCreated: false });
       }
     }
@@ -171,11 +175,11 @@ function applyCommentStamps(entry, config, f, transitions) {
     if (!pf) continue;
     if (pf.approval) {
       const stamps = ownStamps(pf.approval.reactions, config.account);
-      if (approveIsValid(stamps, pf.approval.comment?.updated_at, config)) pr.selfApproved = true;
+      if (matchedApprove(stamps, pf.approval.comment?.updated_at, config)) pr.selfApproved = true;
     }
     if (pf.triage) {
       const stamps = ownStamps(pf.triage.reactions, config.account);
-      if (approveIsValid(stamps, pf.triage.comment?.updated_at, config)) pr.triageApproved = true;
+      if (matchedApprove(stamps, pf.triage.comment?.updated_at, config)) pr.triageApproved = true;
     }
   }
 }

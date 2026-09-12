@@ -38,7 +38,7 @@ import { lintMemo, lintPr } from "./lib/lint.mjs";
 import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
 import { runWorker, parseEnvelope, applyEnvelope } from "./lib/worker.mjs";
-import { emojiFor, approveName, parkName, redoNames } from "./lib/stamps.mjs";
+import { emojiFor, approveNames, parkNames, redoNames } from "./lib/stamps.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
 const command = positional[0];
@@ -181,7 +181,7 @@ async function main() {
       const result =
         kind === "pr"
           ? lintPr(text, { title: opts.title })
-          : lintMemo(text, { approveEmoji: emojiFor(approveName(config)) });
+          : lintMemo(text, { approveEmojis: approveNames(config).map(emojiFor) });
       const code = emit({ command: `lint ${kind}`, file, ...result }, { human, render: renderLint });
       // lint 違反は「作り直し」であって停止ではないので、専用の終了コード 2 を返す
       return result.ok ? code : EXIT_LINT;
@@ -212,25 +212,31 @@ async function main() {
 
     case "stamps": {
       // どのリアクションをどの意味に使っているか。フッタの文面はこれに合わせる。
-      const redo = redoNames(config).map((n) => ({ name: n, emoji: emojiFor(n) }));
+      const asList = (names) => names.map((n) => ({ name: n, emoji: emojiFor(n) }));
+      const approve = asList(approveNames(config));
+      const park = asList(parkNames(config));
+      const redo = asList(redoNames(config));
+      const join = (list) => list.map((x) => x.emoji).join("");
       return emit(
         {
           command: "stamps",
-          approve: { name: approveName(config), emoji: emojiFor(approveName(config)) },
-          park: { name: parkName(config), emoji: emojiFor(parkName(config)) },
+          approve,
+          park,
           redo,
-          footer: `${emojiFor(approveName(config))} 着手OK ／ ${emojiFor(parkName(config))} 後回し`,
+          footer: `${join(approve)} 着手OK ／ ${join(park)} 後回し`,
         },
         {
           human,
-          render: (b) =>
-            [
-              ` 承認・着手OK  ${b.approve.emoji}  (${b.approve.name})`,
-              ` 後回し        ${b.park.emoji}  (${b.park.name})`,
-              ` 作り直し      ${b.redo.map((r) => `${r.emoji} (${r.name})`).join("  ")}`,
+          render: (b) => {
+            const line = (list) => list.map((x) => `${x.emoji} (${x.name})`).join("  ");
+            return [
+              ` 承認・着手OK  ${line(b.approve)}`,
+              ` 後回し        ${line(b.park)}`,
+              ` 作り直し      ${line(b.redo)}`,
               "",
               ` フッタの文面: ${b.footer}`,
-            ].join("\n"),
+            ].join("\n");
+          },
         },
       );
     }
