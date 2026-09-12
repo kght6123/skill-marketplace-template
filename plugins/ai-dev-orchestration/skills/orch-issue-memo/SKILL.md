@@ -20,7 +20,7 @@ argument-hint: <org/repo#123> [--mode sizing|split|memo|memo-update|memo-redo|cr
 | `split` | 大・深さ<3 | 分割案を投稿 → split-review |
 | `memo` | 小 | 理解メモを投稿 → 確認事項の有無で分岐 |
 | `memo-update` | 回答あり | 同じコメントを上書き |
-| `memo-redo` / `split-redo` | 👎😕❤️ | 新コメントを投稿し、旧を折りたたむ |
+| `memo-redo` / `split-redo` | 👎😕👀 | 新コメントを投稿し、旧を折りたたむ |
 | `create-children` | 分割案に🚀 | 表を解析して Sub Issue を作成 |
 
 ## 手順
@@ -52,7 +52,7 @@ node "$ORCH" state set <key> --set '{"sizing":{"estimatedPrs":3,"examples":4}}'
 
 **memo / memo-update / memo-redo** — `references/memo-template.md` の形で本文を書き、ファイルに保存する。
 `memo-redo` のときは、押されたスタンプ（`state get` の `redo`）が示す方向に直す。
-👎＝理解がズレ、😕＝例が違う、❤️＝長い。
+👎＝理解がズレ、😕＝例が違う、👀＝長い（読むのが大変）。
 
 **split / split-redo** — `references/split-template.md` の形で書く。
 

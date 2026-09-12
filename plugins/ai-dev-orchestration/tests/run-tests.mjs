@@ -458,12 +458,23 @@ run(["sync"], { env: withGh({
   comment: { id: 2345678902, body: "## 理解メモ", updated_at: "2026-09-12T00:00:00Z" },
   commentReactions: [{ content: "eyes", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
 }) });
-check("既定では 👀 は無視される（別用途で使える）",
+check("コメントの 👀 は作り直しになる（parked にはしない）",
   json(["state", "get", "org/order-api#124"]).entry.status, "memo-review");
+
+// Issue本文で意味を持つのは承認と後回しだけ。作り直しスタンプは無視する
+resetState();
+run(["state", "set", "org/order-api#124", "--status", "candidate"]);
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [{ content: "eyes", created_at: "2026-09-12T01:00:00Z", user: { login: "kght6123" } }],
+}) });
+check("Issue本文の 👀 は状態を変えない",
+  json(["state", "get", "org/order-api#124"]).entry.status, "candidate");
 
 const stampInfo = json(["stamps"]);
 check("スタンプの割り当てを出す", [stampInfo.approve.emoji, stampInfo.park.emoji], ["🚀", "🎉"]);
-check("作り直しは 👎😕❤️", stampInfo.redo.map((r) => r.emoji), ["👎", "😕", "❤️"]);
+check("作り直しは 👎😕👀", stampInfo.redo.map((r) => r.emoji), ["👎", "😕", "👀"]);
 check("フッタの文面を出す", stampInfo.footer, "🚀 着手OK ／ 🎉 後回し");
 
 // 4. sync はロックを持ったままGitHubを待たない

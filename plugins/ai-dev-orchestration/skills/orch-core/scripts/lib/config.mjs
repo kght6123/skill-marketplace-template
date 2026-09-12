@@ -29,7 +29,7 @@ export const DEFAULT_CONFIG = {
   stamps: {
     approve: "rocket", // 承認・着手OK
     park: "hooray",    // 後回し（parked）
-    redo: ["-1", "confused", "heart"], // 作り直し
+    redo: ["-1", "confused", "eyes"], // 作り直し
   },
 
   // 段階的に導入するための段。AIはこれを人に確認しない。設定に従うだけ。
