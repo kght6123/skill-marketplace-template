@@ -3,8 +3,8 @@
 置き場所は `$ORCH_HOME/orch.config.json`（既定 `~/.orch/orch.config.json`）。
 `node "$ORCH" init` で雛形が作られる。
 
-> 仕様（ToDo#59）はYAMLで書かれているが、依存ゼロで動かすため既定はJSONにしている。
-> キー構成は仕様と1対1。`js-yaml` が解決できる環境なら `orch.config.yaml` も読む。
+> 元の仕様はYAMLで書かれているが、依存ゼロで動かすため既定はJSONにしている。
+> キー構成は元の仕様と1対1。`js-yaml` が解決できる環境なら `orch.config.yaml` も読む。
 
 ## プロファイル（モデルの組み合わせ）
 
