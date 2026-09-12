@@ -3,7 +3,7 @@
 // 出力形式の検証と、修正するか needs-human にするかの判定はスクリプト側。
 import fs from "node:fs";
 import { execFileSync } from "node:child_process";
-import { loadState, saveState } from "./state.mjs";
+import { loadState, updateState } from "./state.mjs";
 
 const SEVERITIES = ["block", "warn", "info"];
 
@@ -41,10 +41,8 @@ function prRecord(state, key, prNumber) {
 
 // command 型を実行し、AI が回すべき step を返す
 export function run(config, { key, pr: prNumber, changedFiles = [] }) {
-  const state = loadState();
-  const { pr } = prRecord(state, key, prNumber);
-  pr.review.round += 1;
-
+  prRecord(loadState(), key, prNumber); // 先に存在確認だけする
+  const collected = {};
   const executed = [];
   const pending = [];
   for (const step of config.review.steps || []) {
@@ -58,7 +56,7 @@ export function run(config, { key, pr: prNumber, changedFiles = [] }) {
           executed.push({ id: step.id, ok: false, errors: check.errors });
           continue;
         }
-        pr.review.results[step.id] = parsed;
+        collected[step.id] = parsed;
         executed.push({ id: step.id, ok: true, findings: parsed.findings.length });
       } catch (err) {
         executed.push({ id: step.id, ok: false, errors: [String(err.message || err)] });
@@ -67,26 +65,31 @@ export function run(config, { key, pr: prNumber, changedFiles = [] }) {
       pending.push({ id: step.id, type: step.skill ? "skill" : step.subagent ? "subagent" : "builtin", ref: step.skill || step.subagent || step.builtin });
     }
   }
-  saveState(state);
-  return { round: pr.review.round, executed, pending };
+  // コマンドの実行が終わってからロックを取る
+  return updateState((state) => {
+    const { pr } = prRecord(state, key, prNumber);
+    pr.review.round += 1;
+    Object.assign(pr.review.results, collected);
+    return { round: pr.review.round, executed, pending };
+  });
 }
 
 // AI が実行した step の結果を受け取る
 export function record(config, { key, pr: prNumber, step, resultFile }) {
-  const state = loadState();
-  const { pr } = prRecord(state, key, prNumber);
   const parsed = JSON.parse(fs.readFileSync(resultFile, "utf8"));
   const check = validateResult(parsed);
   if (!check.ok) return { ok: false, errors: check.errors, onError: config.review.onError };
-  pr.review.results[step] = parsed;
-  saveState(state);
-  return { ok: true, step, findings: parsed.findings.length };
+  return updateState((state) => {
+    const { pr } = prRecord(state, key, prNumber);
+    pr.review.results[step] = parsed;
+    return { ok: true, step, findings: parsed.findings.length };
+  });
 }
 
 // 集計と判定。block が残っていれば修正、maxRounds 超過なら needs-human。
 export function status(config, { key, pr: prNumber }) {
   const state = loadState();
-  const { entry, pr } = prRecord(state, key, prNumber);
+  const { pr } = prRecord(state, key, prNumber);
   const results = Object.values(pr.review?.results || {});
   const all = results.flatMap((r) => r.findings.map((f) => ({ ...f, reviewer: r.reviewer })));
   const blocking = all.filter((f) => f.severity === "block");
@@ -97,9 +100,11 @@ export function status(config, { key, pr: prNumber }) {
     decision = round >= config.review.maxRounds ? "needs-human" : "fix";
   }
   if (decision === "needs-human") {
-    entry.status = "needs-human";
-    entry.unresolvedFindings = blocking;
-    saveState(state);
+    updateState((fresh) => {
+      const entry = fresh.issues[key];
+      entry.status = "needs-human";
+      entry.unresolvedFindings = blocking;
+    });
   }
   return {
     decision,

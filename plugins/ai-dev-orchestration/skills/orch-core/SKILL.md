@@ -15,6 +15,10 @@ argument-hint: [init|status|config] [--repo org/repo]
 | 理解メモ・分割案・実装・PR本文・図の生成 | AI | AI |
 | 🚀の判断・コードレビュー・対応判断 | 人間 | 人間 |
 
+セッションは2種類ある。**マネージャ**は `$ORCH_HOME` で起動し、GitHub と state.json だけを触る。
+**ワーカー**は各リポジトリの worktree で起動し、実装する。そこで起動しないと、そのリポジトリの
+`.claude/settings.json`（権限・フック）とプロジェクトスキルが効かない。詳しくは `references/topology.md`。
+
 ---
 
 ## 0. 実行の鉄則（これを破ると仕組みが壊れる）
@@ -24,6 +28,7 @@ argument-hint: [init|status|config] [--repo org/repo]
 3. **exit code 1 か `"needs_human": true` が返ったら、そこで止めて人間に渡す**。exit code 2 は lint 違反で、これは作り直し
 4. **state.json を直接編集しない**。書き込みは `orch state set` のみ
 5. **AIがやらないこと**: スタンプを押さない／Issue本文を編集しない／自分が作ったもの以外のコメントを編集しない／`gh pr merge` を直接叩かない（マージは `orch merge-train` だけ）
+6. **ワーカーは state を書かない**。`ORCH_ROLE=worker` のセッションでは `orch` が書き込み系を拒否する。結果はエンベロープで返す
 
 ---
 
@@ -47,6 +52,7 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 ```
 
 `orch.config.json` の `account`（自分のGitHubアカウント）と `repos` を埋めるまで、他のコマンドは動かない。
+`repos` には各リポジトリのローカルのチェックアウト先（`path`）も書く。**AIはクローンしない。**
 設定項目は `references/config.md` を読む。
 
 ## 3. コマンド
@@ -62,12 +68,15 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 | `orch lint memo\|pr <file>` | 生成物の上限検査。exit 2 なら作り直し |
 | `orch review run\|record\|status` | AIレビューのpipeline |
 | `orch merge-train` | マージ条件の判定とマージ |
+| `orch worker --key K --action A --prompt f` | 各リポジトリの worktree でワーカーを起動する |
+| `orch apply --file f` | ワーカーの結果エンベロープを state に反映する |
 | `orch conflict --files a,b` | 競合を自動解決とhuman確認に分類 |
 
 詳しい引数は `node "$ORCH"` を引数なしで実行すると出る。
 
 ## 4. 状態とスタンプ
 
+- マネージャとワーカーの分担、リポジトリの場所、並行実行は `references/topology.md`
 - status の一覧と遷移は `references/state.md`
 - スタンプの有効条件（自分のアカウントか／🚀がコメント更新より後か／確認事項が全部チェック済みか）は `references/stamps.md`
 - 仕様全体の見取り図は `references/spec.md`

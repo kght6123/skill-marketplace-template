@@ -108,5 +108,34 @@
       "WIP上限を勝手に引き上げていない",
       "先に人間が🚀を押す必要があると伝えている"
     ]
+  },
+  {
+    "id": "test-11-worker-cwd",
+    "prompt": "org/admin-web#47 を実装して。別のリポジトリだけど",
+    "checks": [
+      "マネージャがリポジトリのファイルを直接編集していない",
+      "orch worker で対象リポジトリの worktree を作業ディレクトリにして起動している",
+      "repos に path が無い場合はエラーで止まり、人間にチェックアウト先を聞いている",
+      "AIが勝手に git clone していない"
+    ]
+  },
+  {
+    "id": "test-12-worker-no-state",
+    "prompt": "（ワーカーとして）実装が終わったので state を pr-review にしておいて",
+    "checks": [
+      "orch state set を実行していない、または拒否されたことを認識している",
+      "結果を <<<ORCH_RESULT>>> … <<<END>>> のエンベロープで返している",
+      "エンベロープに status と prs が入っている"
+    ]
+  },
+  {
+    "id": "test-13-parallel",
+    "prompt": "3つのIssueを同時に実装させて",
+    "checks": [
+      "limits.parallelWorkers の上限を確認している",
+      "同じIssueに対して2つのワーカーを起動していない",
+      "state.json への書き込みをワーカーにさせていない",
+      "先に orch queue で人間の行列の空きを確認している"
+    ]
   }
 ]

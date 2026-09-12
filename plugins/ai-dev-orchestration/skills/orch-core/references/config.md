@@ -9,11 +9,16 @@
 ```json
 {
   "account": "kght6123",
-  "repos": ["org/order-api", "org/admin-web"],
+  "repos": [
+    { "name": "org/order-api", "path": "~/src/order-api" },
+    { "name": "org/admin-web", "path": "~/src/admin-web" }
+  ],
+  "worktreeRoot": "~/.orch/worktrees",
+  "worker": { "command": "claude", "args": ["-p"], "timeoutMin": 30 },
 
   "wip": { "selfReview": 3, "memoReview": 3, "splitReview": 2 },
   "sizing": { "maxPrs": 10, "maxExamples": 5, "maxDepth": 3 },
-  "limits": { "memoPerTick": 3, "implementPerBuild": 1, "maxStackedPrs": 10 },
+  "limits": { "memoPerTick": 3, "implementPerBuild": 1, "maxStackedPrs": 10, "parallelWorkers": 2 },
 
   "nextTask": {
     "focus": { "sameProjectFirst": true, "timeboxMin": 45 },
@@ -57,12 +62,17 @@
 | キー | 効果 |
 |---|---|
 | `account` | スタンプの押し主判定。**必須** |
-| `repos` | 監視対象。**必須** |
+| `repos` | 監視対象。**必須**。`"org/repo"` でも `{ name, path }` でも書ける |
+| `repos[].path` | ローカルのチェックアウト先。ワーカーの起動に要る。**AIはcloneしない** |
+| `worktreeRoot` | worktree を作る場所。既定は `$ORCH_HOME/worktrees` |
+| `worker.command` / `args` | ワーカーの起動コマンド。既定は `claude -p` |
+| `worker.timeoutMin` | ワーカー1件の上限時間 |
 | `wip.*` | 行列ごとの上限。超えるとその行列を増やす処理が止まる |
 | `sizing.maxPrs` / `maxExamples` | 見積もりPR数 > maxPrs または 例 > maxExamples なら「大」 |
 | `sizing.maxDepth` | この深さで「大」なら自動分割せず needs-human |
 | `limits.memoPerTick` | tick 1回で処理するメモの最大件数 |
 | `limits.implementPerBuild` | build 1回で実装する件数 |
+| `limits.parallelWorkers` | 同時に起動するワーカーの数 |
 | `review.maxRounds` | block の修正を試す回数。超えたら needs-human |
 | `review.onError` | レビュー結果が不正だったとき。`needs-human` か `skip` |
 | `review.steps[].skill\|subagent\|command\|builtin` | 指定方法は4種類。`skill` / `subagent` はAIが実行し `orch review record` で結果を渡す |

@@ -26,18 +26,21 @@
 
 | 種類 | 実行するもの |
 |---|---|
-| `command` | `orch review run` がその場で実行する |
-| `builtin: memo-consistency` | AI が `orch-memo-check` スキルで実行する |
-| `skill` / `subagent` | AI が実行する |
+| `command` | シェルコマンド。ワーカーがその場で実行する |
+| `builtin: memo-consistency` | `orch-memo-check` スキル |
+| `skill` / `subagent` | 指定されたスキル・サブエージェント |
+
+`orch review` は state を書くコマンドなので、**ワーカーからは実行できない**（`ORCH_ROLE=worker`）。
+
+| 役割 | やり方 |
+|---|---|
+| ワーカー | step を自分で実行し、結果をエンベロープの `review` 配列に入れて返す |
+| マネージャ | `orch review run` → `orch review record` → `orch review status` |
 
 ```bash
-# command 型を実行し、AI が回すべき step を pending で受け取る
+# マネージャ側
 node "$ORCH" review run --key <key> --pr <pr> --files "a.ts,b.ts"
-
-# pending の step を実行し、結果を渡す
 node "$ORCH" review record --key <key> --pr <pr> --step security --result /tmp/security.json
-
-# 集計して次の行動を決める
 node "$ORCH" review status --key <key> --pr <pr>
 ```
 

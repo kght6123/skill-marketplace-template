@@ -2,7 +2,8 @@
 // 仕様3.5: 状態の一覧取得は検索せず、state.json が持つコメントIDのリアクションを直接見る。
 //          新規Issueと回答だけ「前回実行以降の更新」で差分取得する。
 import { ghJson, fetchReactions } from "./gh.mjs";
-import { loadState, saveState, newEntry, setStatus, parseKey } from "./state.mjs";
+import { repoNames } from "./config.mjs";
+import { loadState, updateState, newEntry, setStatus, parseKey } from "./state.mjs";
 import { ownStamps, rocketIsValid, redoStamp, allQuestionsAnswered } from "./stamps.mjs";
 import { sizeOf } from "./next.mjs";
 
@@ -24,7 +25,7 @@ function since(state) {
 
 // 前回実行以降に更新された Issue を取り込む（未登録なら candidate として登録）
 function ingestIssues(state, config, transitions) {
-  for (const repo of config.repos) {
+  for (const repo of repoNames(config)) {
     const search = since(state) ? ["--search", `updated:>=${since(state)}`] : [];
     const issues = ghJson(
       [
@@ -178,8 +179,7 @@ function closeParents(state, transitions) {
   }
 }
 
-export function sync(config, { dryRun = false } = {}) {
-  const state = loadState();
+function syncInto(state, config) {
   const transitions = [];
   ingestIssues(state, config, transitions);
   for (const entry of Object.values(state.issues)) {
@@ -190,15 +190,18 @@ export function sync(config, { dryRun = false } = {}) {
   }
   closeParents(state, transitions);
   state.lastSync = new Date().toISOString();
-  if (!dryRun) saveState(state);
-  return { transitions, tracked: Object.keys(state.issues).length, dryRun };
+  return { transitions, tracked: Object.keys(state.issues).length };
+}
+
+export function sync(config, { dryRun = false } = {}) {
+  if (dryRun) return { ...syncInto(loadState(), config), dryRun: true };
+  return { ...updateState((state) => syncInto(state, config)), dryRun: false };
 }
 
 // state.json を失ったときの再構築。コメントの目印から辿る。
-export function rebuild(config, { dryRun = false } = {}) {
-  const state = loadState();
+function rebuildInto(state, config) {
   const found = [];
-  for (const repo of config.repos) {
+  for (const repo of repoNames(config)) {
     const issues = ghJson(
       ["issue", "list", "--repo", repo, "--state", "all", "--limit", "200", "--json", "number,title"],
       { allowFail: true },
@@ -221,6 +224,10 @@ export function rebuild(config, { dryRun = false } = {}) {
       }
     }
   }
-  if (!dryRun) saveState(state);
-  return { found, dryRun };
+  return { found };
+}
+
+export function rebuild(config, { dryRun = false } = {}) {
+  if (dryRun) return { ...rebuildInto(loadState(), config), dryRun: true };
+  return { ...updateState((state) => rebuildInto(state, config)), dryRun: false };
 }

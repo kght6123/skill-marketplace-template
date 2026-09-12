@@ -8,7 +8,11 @@ orch — AI開発オーケストレーションの決定的な処理
   orch post --key <key> --kind memo|split|approve|triage --body <file> [--pr N] [--update]
   orch lint memo <file> | orch lint pr <file> [--title "..."]
   orch review run|record|status --key <key> --pr N [--step id] [--result f] [--files a,b]
+  orch worker --key <key> --action implement --prompt <file> [--dry-run]
+  orch apply --file <envelope.json>               ワーカーの結果を state に反映する
   orch merge-train [--dry-run]
   orch conflict --files a.ts,b.ts
 
 終了コード: 0 正常 / 1 エラー / 2 lint違反（作り直し） / 3 needs_human（AIはここで止まる）
+
+マネージャ専用: sync / post / merge-train / worker / apply / state set / review（ORCH_ROLE=worker では拒否）

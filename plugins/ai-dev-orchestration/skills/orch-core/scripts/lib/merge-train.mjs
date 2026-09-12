@@ -1,7 +1,7 @@
 // マージ条件の判定とマージ実行。仕様7章。
 // AI はこのコマンドを起動するだけで、マージ可否を自分で判断しない。
 import { ghJson, ghWrite, isDryRun } from "./gh.mjs";
-import { loadState, saveState, parseKey } from "./state.mjs";
+import { loadState, updateState, parseKey } from "./state.mjs";
 
 const OK_CHECK = ["SUCCESS", "NEUTRAL", "SKIPPED", "EXPECTED"];
 
@@ -80,11 +80,15 @@ export function mergeTrain(config, { dryRun = false } = {}) {
         ["pr", "merge", String(pr.number), "--repo", nameWithOwner, `--${config.merge.method}`, "--delete-branch"],
         { intent: `${entry.key} の PR #${pr.number} をマージ` },
       );
+      // マージのたびに短くロックを取って記録する
+      updateState((fresh) => {
+        const target = (fresh.issues[entry.key].prs || []).find((p) => p.number === pr.number);
+        if (target) target.merged = true;
+      });
       pr.merged = true;
       results.push({ key: entry.key, pr: pr.number, merged: true });
     }
   }
-  if (!dryRun) saveState(state);
   return { results, dryRun: dryRun || isDryRun() };
 }
 

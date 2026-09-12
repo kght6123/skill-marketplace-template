@@ -35,13 +35,63 @@ export function loadState() {
   return { ...emptyState(), ...parsed };
 }
 
+const LOCK_PATH = `${STATE_PATH}.lock`;
+const LOCK_STALE_MS = 60_000;
+
+// 書き込みの排他。ワーカーを並行させても更新が消えないようにする。
+export function withLock(fn, { timeoutMs = 10_000 } = {}) {
+  fs.mkdirSync(ORCH_HOME, { recursive: true });
+  const deadline = Date.now() + timeoutMs;
+  let fd = null;
+  for (;;) {
+    try {
+      fd = fs.openSync(LOCK_PATH, "wx");
+      fs.writeFileSync(fd, String(process.pid));
+      break;
+    } catch (err) {
+      if (err.code !== "EEXIST") throw err;
+      // 落ちたプロセスが置いていったロックは一定時間で無効にする。
+      // statSync の直前に他プロセスがロックを外すことがあるので、その場合は取り直す。
+      let age = 0;
+      try {
+        age = Date.now() - fs.statSync(LOCK_PATH).mtimeMs;
+      } catch (statErr) {
+        if (statErr.code === "ENOENT") continue;
+        throw statErr;
+      }
+      if (age > LOCK_STALE_MS) {
+        fs.rmSync(LOCK_PATH, { force: true });
+        continue;
+      }
+      if (Date.now() > deadline) throw new Error("state.json のロックを取得できません");
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+    }
+  }
+  try {
+    return fn();
+  } finally {
+    if (fd !== null) fs.closeSync(fd);
+    fs.rmSync(LOCK_PATH, { force: true });
+  }
+}
+
 export function saveState(state) {
   fs.mkdirSync(ORCH_HOME, { recursive: true });
   state.updatedAt = new Date().toISOString();
-  const tmp = `${STATE_PATH}.tmp`;
+  const tmp = `${STATE_PATH}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(state, null, 2) + "\n");
   fs.renameSync(tmp, STATE_PATH); // 書き込み中に CLI が読んでも壊れないように
   return state;
+}
+
+// 読み込み → 変更 → 保存 を排他して行う。state を変える処理は必ずこれを使う。
+export function updateState(fn) {
+  return withLock(() => {
+    const state = loadState();
+    const result = fn(state);
+    saveState(state);
+    return result;
+  });
 }
 
 // "org/repo#123" を分解する

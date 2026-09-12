@@ -45,11 +45,12 @@ gh pr view <pr> --repo <org/repo> --json title,body
 }
 ```
 
-ファイルに保存して渡す。
+渡し方は、どちらのセッションで動いているかで変わる。
 
-```bash
-node "$ORCH" review record --key <key> --pr <pr> --step memo-check --result /tmp/memo-check.json
-```
+| 役割 | 渡し方 |
+|---|---|
+| ワーカー（`ORCH_ROLE=worker`、リポジトリの worktree 内） | エンベロープの `review` 配列に入れて返す。`orch review record` は拒否される |
+| マネージャ | `node "$ORCH" review record --key <key> --pr <pr> --step memo-check --result /tmp/memo-check.json` |
 
 ## severity の基準
 

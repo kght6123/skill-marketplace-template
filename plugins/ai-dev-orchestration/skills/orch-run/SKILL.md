@@ -1,12 +1,16 @@
 ---
 name: orch-run
-description: AI開発オーケストレーションの1周（tick / build）を回す司令塔スキル。ユーザーが「AI開発を1周進めて」「orchのtickを回して」「buildを実行して」「今やることを教えて」「orchを回して」「次のタスクは？」などと言ったら使う。自分では生成せず、orch CLI で対象を決めて orch-issue-memo / orch-implement / orch-review-triage に渡し、lint・投稿・state更新・マージまでを順に実行する。
+description: AI開発オーケストレーションの1周（tick / build）をマネージャとして回す司令塔スキル。ユーザーが「AI開発を1周進めて」「orchのtickを回して」「buildを実行して」「今やることを教えて」「orchを回して」「次のタスクは？」などと言ったら使う。自分では実装せず、orch CLI で対象を決め、実装は各リポジトリの worktree でワーカーを起動して任せる。state.json に書くのはこのマネージャだけ。
 argument-hint: [tick|build|next] [--minutes N] [--project org/repo]
 ---
 
 # orch-run
 
-分岐と実行だけを担当する。理解メモもコードも、このスキルは書かない。
+**マネージャ側のスキル。** 分岐と実行だけを担当し、コードは書かない。
+
+`$ORCH_HOME` で起動する。リポジトリのコードを触る作業（実装）は、そのリポジトリの worktree で
+ワーカーを起動して任せる。マネージャがコードを触ると、各リポジトリの権限・フック・CLAUDE.md が
+効かないまま作業することになる。詳しくは `orch-core/references/topology.md`。
 
 スクリプトの場所と実行の鉄則は `orch-core/SKILL.md` を読む。以下 `$ORCH` はその手順で解決したパス。
 
@@ -34,12 +38,32 @@ node "$ORCH" queue
 node "$ORCH" next --mode build
 ```
 
-`items` の `action` で分岐する。
+`items` の `action` ごとに、ワーカー用の指示を書いて起動する。
 
-| action | 渡す先 |
-|---|---|
-| `implement` / `implement-continue` | `orch-implement` |
-| `apply-triage` | `orch-implement`（指摘対応モード） |
+```bash
+cat > /tmp/task-125.md <<'TASK'
+orch-implement スキルの手順で org/order-api#125 を実装してください。
+action: implement
+理解メモ: <本文を貼る>
+終わったら <<<ORCH_RESULT>>> … <<<END>>> で結果を返してください。
+TASK
+
+node "$ORCH" worker --key org/order-api#125 --action implement --prompt /tmp/task-125.md
+```
+
+`orch worker` が worktree を用意し、そこを作業ディレクトリにしてワーカーを起動し、
+返ってきたエンベロープを検証して state に反映するところまでやる。
+
+**並行させる場合**は `orch worker` を同時に複数起動する。上限は `limits.parallelWorkers`（既定2）。
+同じIssueに対して2つ起動しない（worktreeが衝突する）。
+
+```bash
+node "$ORCH" worker --key org/order-api#125 --action implement --prompt /tmp/a.md &
+node "$ORCH" worker --key org/admin-web#47 --action implement --prompt /tmp/b.md &
+wait
+```
+
+`needs_human` が返ったワーカーは、その件だけ止めて人間に渡す。他の件は続けてよい。
 
 実装が終わったら、続けてマージを試す。
 
@@ -93,3 +117,5 @@ claude -p "/orch-build"    # 1時間ごと
 - 行列が満杯なら `orch next` は何も返さない。これは正常な動作で、上限を上げて回避しない
 - 1周で扱う件数はスクリプトが決める。まとめて処理して人間の行列を伸ばさない
 - `orch sync` を飛ばして `next` だけ実行しない。スタンプの読み取りが漏れる
+- マネージャが直接リポジトリを編集しない。実装は必ずワーカーに渡す
+- ワーカーが返したエンベロープを信用しすぎない。検証は `orch worker` がやる。落ちたら止める

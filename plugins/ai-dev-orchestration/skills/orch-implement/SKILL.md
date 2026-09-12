@@ -1,6 +1,6 @@
 ---
 name: orch-implement
-description: 承認済みの理解メモから実装して stacked PR を作るスキル。ユーザーが「このIssueを実装して」「orchのbuildで実装して」「PRを作って」「レビュー指摘に対応して」「次のPRを実装して」「セルフレビューのコメントを作って」などと言ったら使う。worktree を切ってスケルトンのテスト名からテストを書き、AIレビューを通してから PR を作る。マージはしない。
+description: 承認済みの理解メモから実装して stacked PR を作るワーカー側のスキル。ユーザーが「このIssueを実装して」「orchのbuildで実装して」「PRを作って」「レビュー指摘に対応して」「次のPRを実装して」「セルフレビューのコメントを作って」などと言ったら使う。各リポジトリの worktree を作業ディレクトリにして動き、スケルトンのテスト名からテストを書き、AIレビューを通してPRを作る。state.json は書かず、結果をエンベロープで返す。マージはしない。
 argument-hint: <org/repo#123> [--mode implement|continue|apply-triage]
 ---
 
@@ -8,7 +8,14 @@ argument-hint: <org/repo#123> [--mode implement|continue|apply-triage]
 
 理解メモに🚀が付いた（status が `ready`）Issueだけを実装する。メモが無いものには着手しない。
 
-スクリプトの場所と実行の鉄則は `orch-core/SKILL.md` を読む。以下 `$ORCH` はその手順で解決したパス。
+**このスキルはワーカーとして動く。** `orch worker` が用意した worktree が作業ディレクトリになっていて、
+そのリポジトリの `CLAUDE.md`・`.claude/settings.json`・フック・プロジェクトスキルが効いている。
+リポジトリの流儀（テストコマンド・規約）は、ここにあるものに従う。
+
+**state.json は書かない。** `ORCH_ROLE=worker` なので `orch state set` や `orch post` は拒否される。
+やったことは最後にエンベロープで返し、state に反映するのはマネージャ。
+
+スクリプトの場所と実行の鉄則は `orch-core/SKILL.md`、役割の境界は `orch-core/references/topology.md`。
 
 ## モード
 
@@ -52,19 +59,13 @@ git worktree add ../<repo>-ai-<number> -b ai/<number>-<短い説明>
 
 ### 5. AIレビューを通す
 
-```bash
-node "$ORCH" review run --key <key> --pr <pr> --files "$(git diff --name-only main | paste -sd,)"
-```
+`orch review` は state を書くのでワーカーからは使えない。設定された step を自分で実行し、
+結果をエンベロープの `review` に入れて返す。記録するのはマネージャ。
+step の種類と共通の出力形式は `references/review-pipeline.md`。
 
-`pending` に返った step は AI が実行する。詳しくは `references/review-pipeline.md`。
-
-```bash
-node "$ORCH" review record --key <key> --pr <pr> --step security --result /tmp/security.json
-node "$ORCH" review status --key <key> --pr <pr>
-```
-
-`decision` が `fix` なら block を直して `memo-check` と指摘元だけ再実行。`pass` なら次へ。
-`needs-human` が返ったら止める。
+`block` が出たら直す。2回直しても消えなければ `needs_human: true` で返して止める。
+自分のコードを自分で見ると通ってしまうので、`memo-check` は `orch-memo-check` スキルで
+別に実行する。
 
 ### 6. PR を作る
 
@@ -93,20 +94,38 @@ node "$ORCH" state set <key> --set '{"prs":[{"number":46,"order":2,"headSha":"..
 <sub>🚀 レビュー依頼へ ／ 👎 修正依頼（行コメントに理由）／ 👀 後回し</sub>
 ```
 
-```bash
-node "$ORCH" post --key <key> --kind approve --pr 46 --body /tmp/approve.md
-```
+ワーカーは投稿できないので、本文をファイルに書いてエンベロープの `comments` に載せる。
+投稿はマネージャが `orch post --kind approve` で行う。
 
 🚀の意味は「セルフレビューOK、他のエンジニアにレビュー依頼」。マージ条件は他エンジニアのApprove。
 **自分では🚀を押さない。**
 
-### 8. 指摘対応（apply-triage）
+### 8. 結果を返す
+
+最後に必ずこれを標準出力へ出す。これが無いとマネージャは結果を反映できない。
+
+```
+<<<ORCH_RESULT>>>
+{
+  "key": "org/order-api#125",
+  "action": "implement",
+  "status": "pr-review",
+  "prs": [{ "number": 50, "order": 1, "headSha": "aaa111", "branch": "ai/125" }],
+  "review": [{ "reviewer": "memo-check", "findings": [] }],
+  "comments": [{ "kind": "approve", "pr": 50, "bodyFile": "/abs/path/approve.md" }],
+  "needs_human": false,
+  "notes": "テストを3件追加。エラーは400で返した"
+}
+<<<END>>>
+```
+
+### 9. 指摘対応（apply-triage）
 
 `orch-review-triage` が出した対応案に🚀が付いたものだけを実装する。
 
 - 修正してプッシュすると承認は無効になる。新しい承認用コメントを投稿し、旧を折りたたむ
 - セルフレビューの対象は、前回承認したSHA（`approvedSha`）からの差分だけ
-- 対応が終わったら `node "$ORCH" state set <key> --set '{"prs":[...triageApplied: true...]}'`
+- 対応が終わったらエンベロープの `prs` に `"triageApplied": true` を入れて返す
 
 ## 競合
 
@@ -124,3 +143,5 @@ main をブランチにマージする形で対応し、force push はしない�
 - `gh pr merge` を叩かない。マージは `orch merge-train` だけ
 - テストが落ちたまま PR を作らない
 - スタック途中で needs-human になったら、それより後ろのPRは待機させる
+- 他のリポジトリのファイルを触らない。作業ディレクトリの外に出ない
+- エンベロープを出さずに終わらない。途中で止まる場合も `needs_human: true` で返す

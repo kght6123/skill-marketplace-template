@@ -12,12 +12,18 @@
 //   orch post --key org/repo#1 --kind memo --body memo.md [--pr 46] [--update]
 //   orch lint memo <file> | orch lint pr <file> [--title "feat(x): ... [1/2] #1"]
 //   orch review run|record|status --key org/repo#1 --pr 46 [...]
+//   orch worker --key org/repo#1 --action implement --prompt task.md [--dry-run]
+//   orch apply --file result.json
 //   orch merge-train [--dry-run]
 //   orch conflict --files a.ts,b.ts
+//
+// マネージャとワーカーの境界: ORCH_ROLE=worker のセッションでは、state を書く
+// コマンドをこの CLI 自身が拒否する。ワーカーは結果をエンベロープで返し、
+// state に書くのはマネージャだけ。
 import fs from "node:fs";
-import { loadConfig, ORCH_HOME, DEFAULT_CONFIG, configPath } from "./lib/config.mjs";
+import { loadConfig, ORCH_HOME, DEFAULT_CONFIG, configPath, role } from "./lib/config.mjs";
 import { emit, fail, needsHuman, parseArgs, EXIT_OK, EXIT_ERROR, EXIT_LINT } from "./lib/out.mjs";
-import { loadState, saveState, newEntry, setStatus, listEntries, STATE_PATH } from "./lib/state.mjs";
+import { loadState, saveState, updateState, newEntry, setStatus, listEntries, STATE_PATH } from "./lib/state.mjs";
 import { setDryRun, dryRunIntents } from "./lib/gh.mjs";
 import { queueReport, renderQueue } from "./lib/queue.mjs";
 import { humanQueue, selectWork, HUMAN_KINDS } from "./lib/next.mjs";
@@ -26,11 +32,28 @@ import { post } from "./lib/post.mjs";
 import { lintMemo, lintPr } from "./lib/lint.mjs";
 import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
+import { runWorker, parseEnvelope, applyEnvelope } from "./lib/worker.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
 const command = positional[0];
 const human = Boolean(opts.human);
 setDryRun(opts["dry-run"]);
+
+// ワーカーに実行させないコマンド（state を書くもの）
+const MANAGER_ONLY = ["sync", "post", "merge-train", "worker", "apply"];
+const MANAGER_ONLY_SUB = { state: ["set"], review: ["run", "record", "status"] };
+
+function requireManager() {
+  if (role() !== "worker") return;
+  const sub = positional[1];
+  const denied =
+    MANAGER_ONLY.includes(command) || (MANAGER_ONLY_SUB[command] || []).includes(sub);
+  if (denied) {
+    throw new Error(
+      `${[command, sub].filter(Boolean).join(" ")} はマネージャ専用です。ワーカーは結果をエンベロープ（<<<ORCH_RESULT>>> … <<<END>>>）で返してください`,
+    );
+  }
+}
 
 function requireConfigured(config) {
   if (!config._exists) {
@@ -66,6 +89,7 @@ function cmdInit() {
 
 async function main() {
   const config = await loadConfig();
+  requireManager();
 
   switch (command) {
     case "init":
@@ -117,11 +141,13 @@ async function main() {
       if (sub === "set") {
         const key = positional[2];
         if (!key) return fail("キーを指定してください（org/repo#123）");
-        const entry = state.issues[key] || newEntry(key);
-        state.issues[key] = entry;
-        if (opts.set) Object.assign(entry, JSON.parse(opts.set));
-        if (opts.status) setStatus(entry, opts.status);
-        saveState(state);
+        const entry = updateState((fresh) => {
+          const target = fresh.issues[key] || newEntry(key);
+          fresh.issues[key] = target;
+          if (opts.set) Object.assign(target, JSON.parse(opts.set));
+          if (opts.status) setStatus(target, opts.status);
+          return target;
+        });
         return emit({ command: "state set", entry });
       }
       return fail("state の後に list / get / set を指定してください");
@@ -174,6 +200,28 @@ async function main() {
         return emit({ command: "review status", ...result });
       }
       return fail("review の後に run / record / status を指定してください");
+    }
+
+    case "worker": {
+      requireConfigured(config);
+      if (!opts.key || !opts.prompt) return fail("--key と --prompt が要ります");
+      const result = runWorker(config, {
+        key: opts.key,
+        action: opts.action || "implement",
+        promptFile: opts.prompt,
+        dryRun: Boolean(opts["dry-run"]),
+      });
+      if (result.needs_human) return needsHuman("ワーカーの結果を適用できない", result);
+      return emit({ command: "worker", ...result });
+    }
+
+    case "apply": {
+      // ワーカーの結果エンベロープを state に反映する（マネージャ専用）
+      const file = opts.file || positional[1];
+      if (!file || !fs.existsSync(file)) return fail(`エンベロープのファイルがありません: ${file}`);
+      const envelope = parseEnvelope(fs.readFileSync(file, "utf8"));
+      if (!envelope.ok) return needsHuman("エンベロープが不正", { errors: envelope.errors });
+      return emit({ command: "apply", ...applyEnvelope(envelope.data) });
     }
 
     case "merge-train": {

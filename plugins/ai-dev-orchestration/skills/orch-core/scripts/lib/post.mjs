@@ -2,7 +2,7 @@
 // 投稿と同時に commentId を state に記録し、status を進める。
 import fs from "node:fs";
 import { ghJson, ghWrite, isDryRun } from "./gh.mjs";
-import { loadState, saveState, setStatus, parseKey } from "./state.mjs";
+import { loadState, updateState, setStatus, parseKey } from "./state.mjs";
 import { openQuestions } from "./stamps.mjs";
 
 const KINDS = ["memo", "split", "approve", "triage"];
@@ -51,49 +51,54 @@ export function post({ key, kind, bodyFile, pr, update }) {
   if (!KINDS.includes(kind)) throw new Error(`--kind は ${KINDS.join(" / ")} のいずれか`);
   if (!fs.existsSync(bodyFile)) throw new Error(`本文ファイルが無い: ${bodyFile}`);
   const body = fs.readFileSync(bodyFile, "utf8");
-  const state = loadState();
-  const entry = state.issues[key];
-  if (!entry) throw new Error(`state に未登録: ${key}`);
+  const snapshot = loadState().issues[key];
+  if (!snapshot) throw new Error(`state に未登録: ${key}`);
   const { nameWithOwner, number } = parseKey(key);
   const target = pr ? Number(pr) : number;
 
   let result;
-  if (update && entry.commentId) {
-    result = updateComment(nameWithOwner, entry.commentId, bodyFile);
+  if (update && snapshot.commentId) {
+    result = updateComment(nameWithOwner, snapshot.commentId, bodyFile);
   } else {
-    if (entry.commentId && ["memo", "split"].includes(kind)) collapse(nameWithOwner, entry.commentId);
+    if (snapshot.commentId && ["memo", "split"].includes(kind)) {
+      collapse(nameWithOwner, snapshot.commentId);
+    }
     result = postComment(nameWithOwner, target, bodyFile);
   }
 
-  const transition = { key, from: entry.status, to: entry.status };
-  if (kind === "memo") {
-    entry.commentId = result.id;
-    entry.redo = null;
-    entry.answersReady = false;
-    const to = openQuestions(body).length ? "waiting-answer" : "memo-review";
-    setStatus(entry, to);
-    transition.to = to;
-  } else if (kind === "split") {
-    entry.commentId = result.id;
-    entry.redo = null;
-    setStatus(entry, "split-review");
-    transition.to = "split-review";
-  } else if (kind === "approve") {
-    const target = (entry.prs || []).find((p) => p.number === Number(pr));
-    if (!target) throw new Error(`PR #${pr} が state に無い`);
-    target.approvalCommentId = result.id;
-    target.selfApproved = false;
-    target.approvedSha = target.headSha;
-    setStatus(entry, "pr-review");
-    transition.to = "pr-review";
-  } else if (kind === "triage") {
-    const target = (entry.prs || []).find((p) => p.number === Number(pr));
-    if (!target) throw new Error(`PR #${pr} が state に無い`);
-    target.triageCommentId = result.id;
-    target.triageApproved = false;
-    target.triageApplied = false;
-  }
+  // ここから先が state の更新。ネットワークを終えてからロックを取る。
+  return updateState((state) => {
+    const entry = state.issues[key];
+    if (!entry) throw new Error(`state に未登録: ${key}`);
+    const transition = { key, from: entry.status, to: entry.status };
+    if (kind === "memo") {
+      entry.commentId = result.id;
+      entry.redo = null;
+      entry.answersReady = false;
+      const to = openQuestions(body).length ? "waiting-answer" : "memo-review";
+      setStatus(entry, to);
+      transition.to = to;
+    } else if (kind === "split") {
+      entry.commentId = result.id;
+      entry.redo = null;
+      setStatus(entry, "split-review");
+      transition.to = "split-review";
+    } else if (kind === "approve") {
+      const target = (entry.prs || []).find((p) => p.number === Number(pr));
+      if (!target) throw new Error(`PR #${pr} が state に無い`);
+      target.approvalCommentId = result.id;
+      target.selfApproved = false;
+      target.approvedSha = target.headSha;
+      setStatus(entry, "pr-review");
+      transition.to = "pr-review";
+    } else if (kind === "triage") {
+      const target = (entry.prs || []).find((p) => p.number === Number(pr));
+      if (!target) throw new Error(`PR #${pr} が state に無い`);
+      target.triageCommentId = result.id;
+      target.triageApproved = false;
+      target.triageApplied = false;
+    }
 
-  saveState(state);
-  return { commentId: result.id, transition, dryRun: isDryRun() };
+    return { commentId: result.id, transition, dryRun: isDryRun() };
+  });
 }
