@@ -1,0 +1,154 @@
+// コメントの投稿・上書き・折りたたみ。AI が直接 gh でコメントしないための入口。
+// 投稿と同時に commentId を state に記録し、status を進める。
+import fs from "node:fs";
+import { ghJson, ghWrite, isDryRun } from "./gh.mjs";
+import { loadState, updateState, setStatus, parseKey } from "./state.mjs";
+import { openQuestions } from "./stamps.mjs";
+
+const KINDS = ["memo", "split", "approve", "triage"];
+
+// gh の -f/--raw-field は文字列をそのまま渡す。ファイルを読ませるのは -F/--field。
+// -f で書くと "@/tmp/memo.md" という文字列が本文として投稿される。
+export function commentArgs({ nameWithOwner, number, commentId, bodyFile }) {
+  const path = commentId
+    ? `repos/${nameWithOwner}/issues/comments/${commentId}`
+    : `repos/${nameWithOwner}/issues/${number}/comments`;
+  const method = commentId ? ["-X", "PATCH"] : [];
+  return ["api", ...method, path, "-F", `body=@${bodyFile}`];
+}
+
+function postComment(nameWithOwner, number, bodyFile) {
+  if (isDryRun()) {
+    ghWrite(["api", `repos/${nameWithOwner}/issues/${number}/comments`], {
+      intent: `${nameWithOwner}#${number} にコメント投稿`,
+    });
+    return { id: 0, dryRun: true };
+  }
+  return ghJson(commentArgs({ nameWithOwner, number, bodyFile }));
+}
+
+function updateComment(nameWithOwner, commentId, bodyFile) {
+  if (isDryRun()) {
+    ghWrite(["api", "-X", "PATCH", `repos/${nameWithOwner}/issues/comments/${commentId}`], {
+      intent: `コメント ${commentId} を上書き`,
+    });
+    return { id: commentId, dryRun: true };
+  }
+  return ghJson(commentArgs({ nameWithOwner, commentId, bodyFile }));
+}
+
+// 旧コメントは消さずに折りたたむ（履歴を残す）
+function collapse(nameWithOwner, commentId) {
+  const current = ghJson(["api", `repos/${nameWithOwner}/issues/comments/${commentId}`], {
+    allowFail: true,
+  });
+  if (!current) return;
+  if (/^<details>/.test(current.body || "")) return;
+  const folded = `<details><summary>旧版（差し替え済み）</summary>\n\n${current.body}\n\n</details>`;
+  const tmp = `${process.env.TMPDIR || "/tmp"}/orch-collapse-${commentId}.md`;
+  fs.writeFileSync(tmp, folded);
+  updateComment(nameWithOwner, commentId, tmp);
+  fs.unlinkSync(tmp);
+}
+
+// advanceStatus=false は「コメントは投稿するが status は動かさない」。
+// ワーカーの結果を反映する経路では、投稿の後にもう一度 CAS してから status を進める。
+// post が無条件に status を動かすと、投稿している間に人間が押した
+// 後回し／needs-human を上書きしてしまう。
+export function post({ key, kind, bodyFile, pr, update, advanceStatus = true }) {
+  if (!KINDS.includes(kind)) throw new Error(`--kind は ${KINDS.join(" / ")} のいずれか`);
+  if (!fs.existsSync(bodyFile)) throw new Error(`本文ファイルが無い: ${bodyFile}`);
+  const body = fs.readFileSync(bodyFile, "utf8");
+  const snapshot = loadState().issues[key];
+  if (!snapshot) throw new Error(`state に未登録: ${key}`);
+  const { nameWithOwner, number } = parseKey(key);
+  const target = pr ? Number(pr) : number;
+
+  // 更新するコメントは kind ごとに違う。memo/split は entry、
+  // approve/triage は対象PRのもの。ここを取り違えると別のコメントを書き換える。
+  const snapshotPr = (snapshot.prs || []).find((p) => p.number === Number(pr));
+  const existingId = {
+    memo: snapshot.commentId,
+    split: snapshot.commentId,
+    approve: snapshotPr?.approvalCommentId,
+    triage: snapshotPr?.triageCommentId,
+  }[kind];
+
+  // 何をするつもりかを先に決める。--dry-run はここで返して、state を触らない。
+  const intendedStatus = {
+    memo: openQuestions(body).length ? "waiting-answer" : "memo-review",
+    split: "split-review",
+    approve: "pr-review",
+    triage: null,
+  }[kind];
+
+  if (isDryRun()) {
+    return {
+      dryRun: true,
+      wouldPost: {
+        kind,
+        target: pr ? `PR #${pr}` : `Issue #${number}`,
+        update: Boolean(update),
+        commentId: update ? existingId : null,
+        collapse: Boolean(existingId && !update && ["memo", "split"].includes(kind)),
+      },
+      wouldTransition: intendedStatus
+        ? { key, from: snapshot.status, to: intendedStatus }
+        : null,
+    };
+  }
+
+  let result;
+  if (update) {
+    if (!existingId) throw new Error(`--update の対象コメントが state に無い（kind: ${kind}）`);
+    result = updateComment(nameWithOwner, existingId, bodyFile);
+  } else {
+    if (existingId && ["memo", "split"].includes(kind)) collapse(nameWithOwner, existingId);
+    result = postComment(nameWithOwner, target, bodyFile);
+  }
+
+  // ここから先が state の更新。ネットワークを終えてからロックを取る。
+  return updateState((state) => {
+    const entry = state.issues[key];
+    if (!entry) throw new Error(`state に未登録: ${key}`);
+    const transition = { key, from: entry.status, to: entry.status };
+    if (kind === "memo") {
+      entry.commentId = result.id;
+      entry.redo = null;
+      entry.answersReady = false;
+      if (advanceStatus) {
+        setStatus(entry, intendedStatus);
+        transition.to = intendedStatus;
+      }
+    } else if (kind === "split") {
+      entry.commentId = result.id;
+      entry.redo = null;
+      if (advanceStatus) {
+        setStatus(entry, "split-review");
+        transition.to = "split-review";
+      }
+    } else if (kind === "approve") {
+      const target = (entry.prs || []).find((p) => p.number === Number(pr));
+      if (!target) throw new Error(`PR #${pr} が state に無い`);
+      target.approvalCommentId = result.id;
+      target.selfApproved = false;
+      target.approvedSha = null;
+      // このコメントが対象にしている SHA。押されたスタンプは必ずこれに紐づく。
+      // 「今の headSha」に後から結び付けると、古いコミットへの承認が
+      // 新しいコミットの承認として復活してしまう。
+      target.approvalTargetSha = target.headSha || null;
+      if (advanceStatus) {
+        setStatus(entry, "pr-review");
+        transition.to = "pr-review";
+      }
+    } else if (kind === "triage") {
+      const target = (entry.prs || []).find((p) => p.number === Number(pr));
+      if (!target) throw new Error(`PR #${pr} が state に無い`);
+      target.triageCommentId = result.id;
+      target.triageApproved = false;
+      target.triageApplied = false;
+    }
+
+    return { commentId: result.id, transition, dryRun: isDryRun() };
+  });
+}

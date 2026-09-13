@@ -1,0 +1,9 @@
+{
+  "name": "ai-dev-orchestration",
+  "description": "複数プロジェクトのAI開発を、人間の処理量を上限にして回すオーケストレーションのスキル群",
+  "version": "1.0.0",
+  "author": {
+    "name": "kght6123",
+    "url": "https://github.com/kght6123"
+  }
+}

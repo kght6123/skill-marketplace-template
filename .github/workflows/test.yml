@@ -1,0 +1,30 @@
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  orch:
+    name: ai-dev-orchestration
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: 構文チェック
+        run: |
+          for f in $(find plugins -name '*.mjs'); do node --check "$f"; done
+      - name: JSON の検証
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('.claude-plugin/marketplace.json'))"
+          for f in plugins/*/.claude-plugin/plugin.json plugins/*/tests/*.json; do
+            node -e "JSON.parse(require('fs').readFileSync('$f'))"
+          done
+      - name: orch のテスト
+        run: |
+          git config --global user.email "test@example.com"
+          git config --global user.name "test"
+          node plugins/ai-dev-orchestration/tests/run-tests.mjs
