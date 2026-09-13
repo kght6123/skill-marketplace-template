@@ -12,6 +12,7 @@ import { repoNames } from "./config.mjs";
 import { loadState, updateState, newEntry, setStatus, parseKey } from "./state.mjs";
 import { ownStamps, matchedApprove, matchedPark, redoStamp, emojiFor, allQuestionsAnswered } from "./stamps.mjs";
 import { sizeOf } from "./next.mjs";
+import { needsReviewer } from "./assign.mjs";
 
 const MARKERS = {
   memo: /<!--\s*ai-memo\s+v\d+/,
@@ -104,18 +105,56 @@ function commentKnown(f) {
   return Boolean(f.comment?.updated_at && f.commentReactions !== null && f.commentReactions !== undefined);
 }
 
+// PR の承認用・対応案コメントに押されたスタンプをまとめる。
+// どのコメントに押されても「後回し」の意味は同じなので、1つにして扱う。
+function prCommentStamps(entry, config, f) {
+  const all = {};
+  let sawAny = false;
+  for (const pr of entry.prs || []) {
+    if (pr.merged) continue;
+    for (const side of ["approval", "triage"]) {
+      const got = f.prs?.[pr.number]?.[side];
+      if (!got?.comment?.updated_at || !got.reactions) continue;
+      const stamps = ownStamps(got.reactions, config.account);
+      if (!stamps) continue;
+      sawAny = true;
+      for (const [name, value] of Object.entries(stamps)) all[name] = value;
+    }
+  }
+  return sawAny ? all : null;
+}
+
+// PR のコメントのスタンプをすべて確認できたか（取れないものがあれば判断しない）
+function prCommentsKnown(entry, f) {
+  for (const pr of entry.prs || []) {
+    if (pr.merged) continue;
+    for (const [side, id] of [["approval", pr.approvalCommentId], ["triage", pr.triageCommentId]]) {
+      if (!id) continue;
+      const got = f.prs?.[pr.number]?.[side];
+      if (!got?.comment?.updated_at || !got.reactions) return false;
+    }
+  }
+  return true;
+}
+
 // 後回しは一時停止レイヤー。元の状態を覚えておき、外れたらそこへ戻す。
 function applyPark(entry, config, f, transitions, degraded) {
   const bodyStamps = issueKnown(f) ? ownStamps(f.issueReactions, config.account) : null;
   const commentStamps = commentKnown(f) ? ownStamps(f.commentReactions, config.account) : null;
+  // PR の承認用コメント・対応案コメントに押された後回しも見る。
+  // 承認用コメントのフッタには「😄 後回し」と書いてあるので、
+  // ここを見ないと案内した操作が効かない
+  const prStamps = prCommentStamps(entry, config, f);
   const parkedBy =
     (bodyStamps && matchedPark(bodyStamps, config) && "body") ||
     (commentStamps && matchedPark(commentStamps, config) && "comment") ||
+    (prStamps && matchedPark(prStamps, config) && "pr-comment") ||
     null;
 
   if (parkedBy) {
     if (entry.status !== "parked") {
-      const stamps = parkedBy === "body" ? bodyStamps : commentStamps;
+      const stamps =
+        parkedBy === "body" ? bodyStamps : parkedBy === "comment" ? commentStamps : prStamps;
       transitions.push({
         key: entry.key, from: entry.status, to: "parked",
         reason: `${emojiFor(matchedPark(stamps, config))}（${parkedBy}）`,
@@ -127,8 +166,9 @@ function applyPark(entry, config, f, transitions, degraded) {
 
   if (entry.status !== "parked") return "active";
 
-  // 外れたと言えるのは、両方の面を確認できたときだけ
-  const known = issueKnown(f) && (!entry.commentId || commentKnown(f));
+  // 外れたと言えるのは、押せるすべての面を確認できたときだけ
+  const known =
+    issueKnown(f) && (!entry.commentId || commentKnown(f)) && prCommentsKnown(entry, f);
   if (!known) {
     degraded.push({ key: entry.key, reason: "後回しスタンプの有無を確認できない" });
     return "parked";
@@ -282,7 +322,12 @@ export function applyFacts(state, config, facts) {
 
   closeParents(state, transitions);
   state.lastSync = facts.collectedAt;
-  return { transitions, degraded, tracked: Object.keys(state.issues).length };
+  // セルフレビューが済んでレビュアーが未割り当てのPR。マネージャが orch assign を実行する
+  return {
+    transitions, degraded,
+    needsReviewer: needsReviewer(state),
+    tracked: Object.keys(state.issues).length,
+  };
 }
 
 export function sync(config, { dryRun = false } = {}) {

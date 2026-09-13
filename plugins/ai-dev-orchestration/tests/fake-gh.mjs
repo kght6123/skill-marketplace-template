@@ -50,6 +50,7 @@ if (args[0] === "issue" && args[1] === "list") out(scenario.issueList ?? []);
 if (args[0] === "issue" && args[1] === "view") out(scenario.issueView ?? {});
 if (args[0] === "pr" && args[1] === "view") out(scenario.prView ?? {});
 if (args[0] === "pr" && args[1] === "merge") out("merged\n");
+if (args[0] === "pr" && args[1] === "edit") out("");
 if (args[0] === "pr" && args[1] === "create") {
   if (scenario.prCreateFails) boom("HTTP 422");
   const number = scenario.createdPr ?? 90;
@@ -72,7 +73,11 @@ if (args[0] === "api" && /issues\/comments\/\d+$/.test(joined.split(" ").pop() |
   if (scenario.commentFails) boom("HTTP 502");
   out(scenario.comment ?? { id: 1, body: "", updated_at: "2026-09-12T00:00:00Z" });
 }
-if (args[0] === "api" && /issues\/\d+\/comments/.test(joined)) out(scenario.postedComment ?? { id: 555 });
+if (args[0] === "api" && /issues\/\d+\/comments/.test(joined)) {
+  // 投稿だけが落ちる状況（PR作成は成功している）を作れるようにする
+  if (scenario.postCommentFails) boom("HTTP 502");
+  out(scenario.postedComment ?? { id: 555 });
+}
 if (args[0] === "api" && /issues\/comments\/\d+/.test(joined)) {
   if (scenario.commentFails) boom("HTTP 502");
   out(scenario.comment ?? { id: 1, body: "", updated_at: "2026-09-12T00:00:00Z" });

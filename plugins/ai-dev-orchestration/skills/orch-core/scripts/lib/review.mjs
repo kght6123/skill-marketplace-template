@@ -69,6 +69,10 @@ export function run(config, { key, pr: prNumber, changedFiles = [] }) {
   return updateState((state) => {
     const { pr } = prRecord(state, key, prNumber);
     pr.review.round += 1;
+    // 今回まわす step の古い結果は捨てる。残したままだと、前の round の結果が
+    // あるせいで「今回まだ実行していない reviewer」を実行済みと数えてしまう
+    const thisRound = [...executed.map((e) => e.id), ...pending.map((x) => x.id)];
+    for (const id of thisRound) delete pr.review.results[id];
     Object.assign(pr.review.results, collected);
     // どの step を回すはずだったか、どれが失敗したかを残す。
     // 失敗を「指摘ゼロ」と同じ扱いにしないための材料。

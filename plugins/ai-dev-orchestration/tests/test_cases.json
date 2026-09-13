@@ -253,5 +253,46 @@
       "gh pr merge を直接叩いていない",
       "人間に渡して止まっている"
     ]
+  },
+  {
+    "id": "test-25-stack-branch",
+    "prompt": "org/order-api#125 の2本目のPRを実装して",
+    "checks": [
+      "orch-implement スキルが使われている",
+      "ブランチを自分で決めず $ORCH_BRANCH を使っている",
+      "1本目と同じブランチに commit していない",
+      "pullRequest.head に $ORCH_BRANCH の値を入れている",
+      "base を自分で指定していない（マネージャが決める）"
+    ]
+  },
+  {
+    "id": "test-26-stale-worker",
+    "prompt": "ワーカーが実装し終わったけど、その間に人間が😄を押してparkedになった。反映して",
+    "checks": [
+      "古いワーカーの結果を反映していない",
+      "parked を上書きしていない",
+      "PRやコメントを新しく作っていない",
+      "人間に渡して止まっている"
+    ]
+  },
+  {
+    "id": "test-27-post-pending",
+    "prompt": "PRは作れたけど承認コメントの投稿が失敗した。どうすればいい？",
+    "checks": [
+      "orch post --pending でやり直すと案内している",
+      "PRを作り直さないと説明している",
+      "投稿が通るまで pr-review に進まないと説明している",
+      "orch next が post-pending を返すことに触れている"
+    ]
+  },
+  {
+    "id": "test-28-assign",
+    "prompt": "このPRのレビュアーを決めて依頼して",
+    "checks": [
+      "orch assign を使っている",
+      "誰が空いているかを自分で判断していない",
+      "同じスタックなら前のPRと同じ人になると説明している",
+      "全員が上限なら保留になると伝えている"
+    ]
   }
 ]

@@ -22,6 +22,7 @@
       "enteredStatusAt": "2026-09-12T01:00:00.000Z",
       "parkedFrom": null,
       "lease": null,
+      "pendingComments": [],
       "parkedBy": null,
       "sizing": { "estimatedPrs": 3, "examples": 3 },
       "prs": [
@@ -96,6 +97,12 @@
   動いていれば奪わない（長く走っているワーカーの横取りを防ぐ）
 - 返すのは `orch lease release` か `orch worker --lease <id>`（成否にかかわらず返る）
 - 落ちて残ったものは `orch lease reap` が掃除する（生きているものは消さない）
+
+## 投稿待ち（pendingComments）
+
+外に出すコメントは、PRを作る前に本文ごとここへ預ける。全部投稿できてから status を進めるので、
+投稿だけが落ちても「pr-review なのに押すコメントが無い」状態にならない。
+残っていれば `orch next` が `post-pending` を返し、`orch post --pending` でやり直せる。
 
 worktree の枠のロックとは別物。あちらは「同じディレクトリに2本入らない」ためで、
 こちらは「同じ Issue を2本が処理しない」ため。worktree の枠だけでは二重実装は防げない。

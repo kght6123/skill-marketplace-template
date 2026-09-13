@@ -42,6 +42,7 @@ node "$ORCH" lease release --key <key> --id <leaseId>
 | `split` | 分割案 | **`lint split`** | `post --kind split` | → split-review |
 | `split-redo` | 直した分割案（新規） | **`lint split`** | `post --kind split` | 旧は post が折りたたむ |
 | `create-children` | Sub Issue（GitHub上） | しない | **しない** | `gh issue create --parent` → 子を `state set --status sizing` → 親に `--set '{"childrenCreated":true}'` |
+| `post-pending` | 無し（前回の投稿が残っている） | しない | `post --pending --key <key>` | 通れば status が進む。PRは作り直さない |
 
 `sizing` と `create-children` には投稿する本文が無い。ファイルが無いのに `lint` や `post` を呼ぶと
 そこで落ちる。逆に本文を作る5つは、**lint を通さずに post しない**（exit 2 なら作り直し、最大2回、
@@ -73,6 +74,10 @@ node "$ORCH" next --mode build --claim
 | `implement` | 1本目の実装 | `pullRequest`（新規PR）＋ `approve` コメント |
 | `implement-continue` | 続きのPR（base は前のブランチ） | 同上 |
 | `apply-triage` | 🚀済みの対応案を反映して再プッシュ | `prs`（`headSha` 更新）＋ 新しい `approve` コメント |
+| `post-pending` | （ワーカーを起動しない）`orch post --pending --key <key>` だけ | — |
+
+ブランチはマネージャが state から決めて `ORCH_BRANCH` で渡す。1本目は `orch/125/1`、
+2本目は `orch/125/2`（1本目から分岐）。ワーカーに決めさせない。
 
 PR作成もコメント投稿もマネージャ側で `orch worker` がやる。ワーカーの出力を見て自分で
 `gh pr create` や `orch post` を追加で叩かない（二重に作る）。
@@ -114,6 +119,16 @@ wait
 worktree の枠だけでは二重実装は防げない（別々の枠に入って同じ Issue を2回実装できる）。
 
 `needs_human` が返ったワーカーは、その件だけ止めて人間に渡す。他の件は続けてよい。
+
+`orch sync` が `needsReviewer` を返したら、その件にレビュアーを割り当てる。
+誰が空いているかを自分で考えない。依頼中件数・上限・スタックの引き継ぎはスクリプトが決める。
+
+```bash
+node "$ORCH" assign --key org/order-api#123 --pr 46
+```
+
+`waiting: true` が返ったら全員が上限。これは異常ではなく人間の行列を守っている状態なので、
+上限を上げて回避しない。
 
 実装が終わったら、続けてマージを試す。
 

@@ -93,6 +93,41 @@ export function reapLeases() {
   });
 }
 
+// ワーカーが終わった「後」に、開始時の前提がまだ成り立っているかを確かめる。
+//
+// 開始時に予約を取っても、走っている間に人間が 😄 や needs-human にできる。
+// 再確認せずに反映すると、古いワーカーの結果が人間の停止操作を上書きしてしまう。
+// 外部への副作用（PR作成・コメント投稿）より前に必ず通す。
+const START_STATUS = {
+  implement: ["ready"],
+  "implement-continue": ["implementing", "ready"],
+  "apply-triage": ["pr-review", "implementing"],
+};
+
+export function verifyClaim(state, key, { leaseId = null, action = null } = {}) {
+  const entry = state.issues[key];
+  if (!entry) return { ok: false, errors: [`state に未登録: ${key}`] };
+  const errors = [];
+
+  if (leaseId) {
+    const current = entry.lease;
+    if (!current) errors.push("予約が外れている（他のマネージャが処理したか、期限切れ）");
+    else if (current.id !== leaseId) errors.push(`別の予約が入っている（${current.id}）`);
+    else if (!leaseIsLive(current)) errors.push("予約の期限が切れている");
+    else if (action && current.action !== action) {
+      errors.push(`予約の action が違う（予約: ${current.action} / 実行: ${action}）`);
+    }
+  }
+
+  // 人間が止めた（parked / needs-human）なら、走り終えた結果でも反映しない
+  const allowed = action ? START_STATUS[action] : null;
+  if (allowed && !allowed.includes(entry.status)) {
+    errors.push(`status が ${entry.status} に変わっている（${action} の開始条件: ${allowed.join(" / ")}）`);
+  }
+
+  return errors.length ? { ok: false, errors, status: entry.status } : { ok: true, status: entry.status };
+}
+
 export function leaseStatus() {
   const state = loadState();
   return { leases: liveLeases(state) };

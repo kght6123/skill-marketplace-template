@@ -12,8 +12,10 @@
 //   orch queue [--human]
 //   orch next [--mode memo|build] [--claim] [--minutes N] [--project org/repo] [--human]
 //   orch lease list|release --key org/repo#1 [--id <leaseId>] | orch lease reap
+//   orch assign --key org/repo#1 --pr 46 [--plan] | orch assign list
 //   orch state list|get|set ...
 //   orch post --key org/repo#1 --kind memo --body memo.md [--pr 46] [--update]
+//   orch post --pending --key org/repo#1            投稿だけ残っているものをやり直す
 //   orch lint memo|split <file> | orch lint pr <file> [--title "feat(x): ... [1/2] #1"]
 //   orch review run|record|status --key org/repo#1 --pr 46 [...]
 //   orch worker --key org/repo#1 --action implement --prompt task.md [--lease ID] [--dry-run]
@@ -39,8 +41,9 @@ import { post } from "./lib/post.mjs";
 import { lintMemo, lintPr, lintSplit } from "./lib/lint.mjs";
 import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
-import { runWorker, parseEnvelope, finishEnvelope } from "./lib/worker.mjs";
+import { runWorker, parseEnvelope, finishEnvelope, flushPendingComments } from "./lib/worker.mjs";
 import { claimWork, releaseLease, reapLeases, leaseStatus } from "./lib/lease.mjs";
+import { assignReviewer, needsReviewer, pickReviewer } from "./lib/assign.mjs";
 import { emojiFor, approveNames, parkNames, redoNames } from "./lib/stamps.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
@@ -51,7 +54,7 @@ if (typeof opts.profile === "string") process.env.ORCH_PROFILE = opts.profile;
 setDryRun(opts["dry-run"]);
 
 // ワーカーに実行させないコマンド（state を書くもの）
-const MANAGER_ONLY = ["sync", "post", "merge-train", "worker", "apply", "lease"];
+const MANAGER_ONLY = ["sync", "post", "merge-train", "worker", "apply", "lease", "assign"];
 const MANAGER_ONLY_SUB = { state: ["set"], review: ["run", "record", "status"] };
 
 function requireManager() {
@@ -146,6 +149,24 @@ async function main() {
       );
     }
 
+    case "assign": {
+      // レビュアーの割り当て。誰が空いているかを AI に考えさせない
+      requireConfigured(config);
+      if (positional[1] === "list") {
+        return emit({ command: "assign list", items: needsReviewer(loadState()) });
+      }
+      if (!opts.key || !opts.pr) return fail("--key と --pr が要ります");
+      if (opts.plan) {
+        return emit({ command: "assign plan", ...pickReviewer(loadState(), config, opts.key, opts.pr) });
+      }
+      const assigned = assignReviewer(config, { key: opts.key, pr: opts.pr });
+      if (!assigned.ok) {
+        // 全員が上限なら、それは異常ではなく「待ち」。人間の行列を守っている
+        return emit({ command: "assign", ...assigned });
+      }
+      return emit({ command: "assign", ...assigned });
+    }
+
     case "lease": {
       // 論理タスクの予約。worktree のロックとは別物（同じ Issue の二重実行を防ぐ）
       const sub = positional[1] || "list";
@@ -191,6 +212,22 @@ async function main() {
 
     case "post": {
       requireConfigured(config);
+      // 投稿だけが残っている件のやり直し。PRは作り直さない。
+      // 通れば status も進む（承認用コメントが無いまま pr-review にしない）
+      if (opts.pending) {
+        if (!opts.key) return fail("--key が要ります");
+        const flushed = flushPendingComments(opts.key);
+        if (!flushed.ok) return needsHuman("投稿をやり直せない", flushed);
+        const entry = updateState((fresh) => {
+          const target = fresh.issues[opts.key];
+          if (!target) throw new Error(`state に未登録: ${opts.key}`);
+          if (target.status === "implementing" && (target.prs || []).length) {
+            setStatus(target, "pr-review");
+          }
+          return target;
+        });
+        return emit({ command: "post --pending", ...flushed, status: entry.status });
+      }
       const result = post({
         key: opts.key,
         kind: opts.kind,
@@ -356,6 +393,7 @@ async function main() {
           action: opts.action || "implement",
           promptFile: opts.prompt,
           dryRun: Boolean(opts["dry-run"]),
+          lease, // 反映の直前にも、この予約が生きているかを確かめる
         });
       } finally {
         // 予約は成否にかかわらず返す。返し忘れると、その Issue が誰にも選べなくなる
@@ -380,7 +418,9 @@ async function main() {
         action,
         cwd: typeof opts.cwd === "string" ? opts.cwd : null,
         outbox: typeof opts.outbox === "string" ? opts.outbox : null,
+        lease: typeof opts.lease === "string" ? opts.lease : null,
       });
+      if (!done.ok) return needsHuman("エンベロープを反映できない", done);
       return emit({
         command: "apply",
         ...done.applied,

@@ -65,6 +65,7 @@ pwd && git branch --show-current   # = $ORCH_BRANCH
 ```
 
 ブランチが `$ORCH_BRANCH` と違っていたら、切り替えずに `needs_human: true` で返す。
+ブランチ名を自分で決めない。スタックの何本目かはマネージャが state から決めている。
 **このディレクトリの外に出ない。`git worktree add` も `git push --force` もしない。**
 
 ### 3. テストから書く
@@ -105,16 +106,16 @@ exit 2 なら作り直す。通ったらエンベロープの `pullRequest` に�
 ```json
 "pullRequest": {
   "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",
-  "head": "orch/125",
-  "base": "orch/124",
+  "head": "<$ORCH_BRANCH の値>",
   "bodyFile": "$ORCH_OUTBOX/pr-body.md",
   "draft": false
 }
 ```
 
-`base` は2本目以降だけ、前のPRのブランチを指す（stacked）。1本目は省くと既定ブランチになる。
-マネージャは作る前にもう一度 `lint pr` をかけ、落ちたら作らない。番号は作った後にマネージャが
-`prs` へ記録するので、ワーカーが番号を書く必要はない。
+`head` は必ず `$ORCH_BRANCH`。違うブランチを書くとマネージャが拒否する。
+`base` はマネージャが state から決めるので書かなくてよい（2本目以降は前のPRのブランチ）。
+マネージャは作る前にもう一度 `lint pr` をかけ、落ちたら作らない。番号と `headSha` は
+作った後にマネージャが記録するので、ワーカーが書く必要はない。
 
 ### 7. セルフレビューの承認用コメントを用意する
 
@@ -149,7 +150,7 @@ exit 2 なら作り直す。通ったらエンベロープの `pullRequest` に�
   "status": "pr-review",
   "pullRequest": {
     "title": "feat(order-api): 期間指定でCSVを絞り込む [1/3] #125",
-    "head": "orch/125",
+    "head": "<$ORCH_BRANCH の値>",
     "bodyFile": "<$ORCH_OUTBOX>/pr-body.md"
   },
   "review": [{ "reviewer": "memo-check", "findings": [] }],

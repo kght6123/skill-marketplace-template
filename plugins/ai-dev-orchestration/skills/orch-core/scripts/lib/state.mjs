@@ -146,6 +146,7 @@ export function newEntry(key, overrides = {}) {
     title: null,
     milestoneDue: null,
     lease: null, // 論理タスクの予約（lease.mjs）。二重実行の防止に使う
+    pendingComments: [], // 投稿待ちのコメント。出し終えるまで status を進めない
     enteredStatusAt: new Date().toISOString(),
     ...overrides,
   };

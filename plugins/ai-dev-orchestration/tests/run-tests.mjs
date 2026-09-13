@@ -179,6 +179,8 @@ fs.writeFileSync(envOk, [
   }),
   "<<<END>>>",
 ].join("\n"));
+// 反映は「開始条件のままか」も見る。実装の結果なので ready から始まっている必要がある
+run(["state", "set", "org/order-api#124", "--status", "ready"]);
 const applied = json(["apply", "--file", envOk]);
 check("エンベロープの status が反映される", applied.status, "pr-review");
 check("エンベロープの PR が反映される", applied.prs.map((p) => p.number), [50]);
@@ -201,8 +203,9 @@ resetState({ repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: p
 const promptFile = path.join(home, "task.md");
 fs.writeFileSync(promptFile, "implement it\n");
 const dry = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]);
-check("worktree を作ってその中で起動する", dry.cwd, path.join(home, "wt", "order-api-125"));
-check("ブランチは orch/ 接頭辞", dry.branch, "orch/125");
+check("worktree を作ってその中で起動する", dry.cwd, path.join(home, "wt", "order-api-125-slot-1"));
+// ブランチはスタックの何本目かで決まる。worktree の枠の番号とは別concept
+check("ブランチは orch/<番号>/<スタック>", dry.branch, "orch/125/1");
 check("最初は slot 1", dry.slot, 1);
 
 // --- ワーカーCLIの差し替え（Claude Code 限定にしない）----------------
@@ -240,7 +243,7 @@ resetState({
   worker: { command: "claude", args: ["-p"] },
 });
 check("ブランチ接頭辞を変えられる",
-  json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]).branch, "custom/125");
+  json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]).branch, "custom/125/1");
 
 // Claude Code ではない架空のCLIで、起動から state 反映まで通す
 const fakeCli = path.join(home, "fake-cli.sh");
@@ -262,7 +265,7 @@ resetState({
 const ran = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile]);
 check("Claude Code 以外のCLIでも1周する", ran.ok, true);
 check("ワーカーの結果が state に入る", ran.applied.prs.map((p) => p.number), [99]);
-check("ワーカーは worktree で動いている", ran.cwd, path.join(home, "wt", "order-api-125"));
+check("ワーカーは worktree で動いている", ran.cwd, path.join(home, "wt", "order-api-125-slot-1"));
 
 // 同じIssueに2本来たら worktree を連番で分ける
 const slowCli = path.join(home, "slow-cli.sh");
@@ -293,10 +296,16 @@ const both = await Promise.all([0, 300].map((delay) =>
       p.on("close", () => resolve(JSON.parse(out)));
     }, delay);
   })));
-check("同時に来たら worktree の連番が分かれる", both.map((r) => r.slot).sort(), [1, 2]);
-check("ブランチも連番で分かれる", both.map((r) => r.branch).sort(), ["slots/125", "slots/125-2"]);
+// 同じ Issue の同じスタック位置は、枠を変えても2本同時に実装しない。
+// （以前は枠の連番からブランチを作っていたので、同じ実装が2本できていた）
+const okRuns = both.filter((r) => r.ok !== false);
+const rejected = both.filter((r) => r.ok === false);
+check("同じスタックを2本同時には実装しない", okRuns.length, 1);
+check("2本目は理由を返して止まる",
+  rejected.length === 1 && /作業中/.test(JSON.stringify(rejected[0])), true);
 const after = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile, "--dry-run"]);
 check("終わった枠は再利用される", after.slot, 1);
+check("次も同じスタック位置のブランチを指す", after.branch, "slots/125/1");
 
 // --dry-run は副作用なし
 resetState({
@@ -323,6 +332,7 @@ fs.writeFileSync(liarCli, [
 fs.chmodSync(liarCli, 0o755);
 resetState({
   repos: [{ name: "org/order-api", path: repoPath }], worktreeRoot: path.join(home, "wt-liar"),
+  branchPrefix: "liar/", // 前のテストが同じブランチを checked out したままなので分ける
   worker: { command: liarCli, args: [] },
 });
 const liar = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile], { expectExit: 3 });
@@ -686,8 +696,9 @@ const together = await Promise.all([0, 0].map(() =>
     proc.stdout.on("data", (d) => (out += d));
     proc.on("close", () => resolve(JSON.parse(out)));
   })));
-check("同時に始めても同じ worktree に入らない",
-  new Set(together.map((r) => r.cwd)).size, 2);
+// 枠の取り合いは排他的に解決される（片方だけが worktree を持つ）
+check("同時に始めても同じ worktree を2本が掴まない",
+  together.filter((r) => r.ok !== false).length <= 1, true);
 
 
 // --- ワーカーが 0 以外で終わったら、エンベロープがあっても採用しない --------
@@ -756,7 +767,7 @@ resetState({
   branchPrefix: "alive/",
   worker: { command: "claude", args: ["-p"], timeoutMin: 1 }, // 1分で stale 扱いになる設定
 });
-const aliveDir = path.join(home, "wt-alive", "order-api-125");
+const aliveDir = path.join(home, "wt-alive", "order-api-125-slot-1");
 fs.mkdirSync(path.join(home, "wt-alive"), { recursive: true });
 fs.writeFileSync(`${aliveDir}.lock`, JSON.stringify({
   pid: process.pid, hostname: os.hostname(), at: "2000-01-01T00:00:00Z",
@@ -798,7 +809,7 @@ fs.writeFileSync(reuseCli, [
 fs.chmodSync(reuseCli, 0o755);
 resetState(withWorker(reuseCli, { branchPrefix: "reuse/", worktreeRoot: path.join(home, "wt-reuse") }));
 run(["worker", "--key", "org/order-api#125", "--prompt", promptFile]);
-const reuseDir = path.join(home, "wt-reuse", "order-api-125");
+const reuseDir = path.join(home, "wt-reuse", "order-api-125-slot-1");
 fs.writeFileSync(path.join(reuseDir, "README.md"), "前のワーカーの書きかけ\n");
 fs.writeFileSync(path.join(reuseDir, "junk.tmp"), "残骸\n");
 const reused = json(["worker", "--key", "org/order-api#125", "--prompt", promptFile]);
@@ -822,7 +833,7 @@ fs.writeFileSync(e2eCli, [
   "<<<ORCH_RESULT>>>",
   '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
   `  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",`,
-  `                   "head": "e2e/125", "bodyFile": "$ORCH_OUTBOX/pr-body.md" },`,
+  `                   "head": "$ORCH_BRANCH", "bodyFile": "$ORCH_OUTBOX/pr-body.md" },`,
   `  "comments": [{ "kind": "approve", "bodyFile": "$ORCH_OUTBOX/approve.md" }] }`,
   "<<<END>>>",
   "JSON",
@@ -894,7 +905,7 @@ fs.writeFileSync(badCli, [
   "<<<ORCH_RESULT>>>",
   '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
   `  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",`,
-  `                   "head": "bad/125", "bodyFile": "$ORCH_OUTBOX/pr-body.md" } }`,
+  `                   "head": "$ORCH_BRANCH", "bodyFile": "$ORCH_OUTBOX/pr-body.md" } }`,
   "<<<END>>>",
   "JSON",
 ].join("\n"));
@@ -1102,6 +1113,253 @@ const leased2 = json(["next", "--mode", "build", "--claim"]).items[0];
 run(["worker", "--key", "org/order-api#125", "--action", "implement",
   "--prompt", promptFile, "--lease", leased2.leaseId], { expectExit: 3 });
 check("ワーカーが失敗しても予約は返る", json(["lease", "list"]).leases.length, 0);
+
+
+// --- スタックのブランチは worktree の枠と別concept ------------------------
+// 逐次に implement → implement-continue しても、2本目が別ブランチになること。
+const stackBody = path.join(home, "stack-pr.md");
+fs.copyFileSync(path.join(fixtures, "pr-ok.md"), stackBody);
+const stackCli = path.join(home, "stack.sh");
+fs.writeFileSync(stackCli, [
+  "#!/bin/sh",
+  `cp "${stackBody}" "$ORCH_OUTBOX/pr-body.md"`,
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
+  '  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [1/3] #123",',
+  '                   "head": "$ORCH_BRANCH", "bodyFile": "$ORCH_OUTBOX/pr-body.md" } }',
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(stackCli, 0o755);
+resetState(withWorker(stackCli, { branchPrefix: "stack/", worktreeRoot: path.join(home, "wt-stack") }));
+run(["state", "set", "org/order-api#125", "--status", "ready", "--set", '{"blockedBy":[],"prs":[]}']);
+const first = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { env: withGh({ createdPr: 101, prView: { headRefOid: "sha101" } }) });
+check("1本目は stack/125/1", first.branch, "stack/125/1");
+check("1本目の PR が記録される", first.applied.prs.map((p) => p.number), [101]);
+check("PR作成時に headSha も記録する", first.applied.prs[0].headSha, "sha101");
+
+// implementing になった状態で続きを実装する
+run(["state", "set", "org/order-api#125", "--status", "implementing"]);
+const second = json(["worker", "--key", "org/order-api#125", "--action", "implement-continue", "--prompt", promptFile],
+  { env: withGh({ createdPr: 102, prView: { headRefOid: "sha102" } }) });
+check("2本目は別のブランチになる", second.branch, "stack/125/2");
+check("1本目と同じブランチを使い回さない", second.branch === first.branch, false);
+check("2本目の base は1本目のブランチ", second.applied.prs[1].base, "stack/125/1");
+check("2本のPRが並ぶ", second.applied.prs.map((p) => p.number), [101, 102]);
+check("枠は同じでよい（物理的な置き場は使い回す）", second.slot, first.slot);
+
+// 指摘対応は新しいスタックを作らず、対象PRのブランチで作業する
+run(["state", "set", "org/order-api#125", "--status", "pr-review", "--set",
+  JSON.stringify({ prs: [
+    { number: 101, order: 1, branch: "stack/125/1", merged: false },
+    { number: 102, order: 2, branch: "stack/125/2", merged: false, triageApproved: true, triageApplied: false },
+  ] })]);
+const triagePlan = json(["worker", "--key", "org/order-api#125", "--action", "apply-triage",
+  "--prompt", promptFile, "--dry-run"]);
+check("指摘対応は対象PRのブランチで作業する", triagePlan.branch, "stack/125/2");
+
+// --- 割り当てたブランチ以外から PR を作らせない ---------------------------
+const wrongHeadCli = path.join(home, "wrong-head.sh");
+fs.writeFileSync(wrongHeadCli, [
+  "#!/bin/sh",
+  `cp "${stackBody}" "$ORCH_OUTBOX/pr-body.md"`,
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
+  '  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [1/3] #123",',
+  '                   "head": "main", "bodyFile": "$ORCH_OUTBOX/pr-body.md" } }',
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(wrongHeadCli, 0o755);
+resetState(withWorker(wrongHeadCli, { branchPrefix: "head/", worktreeRoot: path.join(home, "wt-head") }));
+run(["state", "set", "org/order-api#125", "--status", "ready", "--set", '{"blockedBy":[],"prs":[]}']);
+const wrongHead = run(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { expectExit: 1, env: withGh({ createdPr: 103 }) });
+check("割り当てと違う head の PR は作らない", /割り当てたブランチと違う/.test(wrongHead), true);
+check("PRを作っていないので state にも入らない",
+  json(["state", "get", "org/order-api#125"]).entry.prs.length, 0);
+
+// --- 走っている間に人間が止めたら、古い結果を反映しない --------------------
+// ワーカーが走っている最中に 😄 や needs-human が付く状況を、
+// 起動前に status を変えてから apply することで再現する。
+function staleApply(status) {
+  resetState();
+  run(["state", "set", "org/order-api#124", "--status", status]);
+  const env = path.join(home, `stale-${status}.txt`);
+  fs.writeFileSync(env, [
+    "<<<ORCH_RESULT>>>",
+    JSON.stringify({ key: "org/order-api#124", action: "implement", status: "pr-review" }),
+    "<<<END>>>",
+  ].join("\n"));
+  return json(["apply", "--file", env], { expectExit: 3 });
+}
+const stalePark = staleApply("parked");
+check("parked にされていたら古い結果を反映しない", stalePark.needs_human, true);
+check("理由に status の変化を挙げる",
+  stalePark.errors.some((e) => e.includes("parked")), true);
+check("parked のまま", json(["state", "get", "org/order-api#124"]).entry.status, "parked");
+check("needs-human にされていたら反映しない", staleApply("needs-human").needs_human, true);
+
+// 予約が別のものに差し替わっていたら反映しない
+resetState();
+run(["state", "set", "org/order-api#124", "--status", "ready", "--set", JSON.stringify({
+  lease: { id: "someone-else", action: "implement", pid: process.pid, hostname: os.hostname(),
+           startedAt: "2026-09-13T00:00:00Z", expiresAt: "2099-01-01T00:00:00Z" },
+})]);
+const envLease = path.join(home, "stale-lease.txt");
+fs.writeFileSync(envLease, [
+  "<<<ORCH_RESULT>>>",
+  JSON.stringify({ key: "org/order-api#124", action: "implement", status: "pr-review" }),
+  "<<<END>>>",
+].join("\n"));
+const staleLease = json(["apply", "--file", envLease, "--lease", "my-old-id"], { expectExit: 3 });
+check("予約が差し替わっていたら反映しない",
+  staleLease.errors.some((e) => e.includes("別の予約")), true);
+check("status は変わらない", json(["state", "get", "org/order-api#124"]).entry.status, "ready");
+
+// --- コメント投稿だけ失敗したら pr-review に進めず、やり直せる -------------
+const recoverBody = path.join(home, "recover-pr.md");
+fs.copyFileSync(path.join(fixtures, "pr-ok.md"), recoverBody);
+const recoverCli = path.join(home, "recover.sh");
+fs.writeFileSync(recoverCli, [
+  "#!/bin/sh",
+  `cp "${recoverBody}" "$ORCH_OUTBOX/pr-body.md"`,
+  "printf '%s\\n' \"<!-- ai-approve v1 -->\" > \"$ORCH_OUTBOX/approve.md\"",
+  "cat <<JSON",
+  "<<<ORCH_RESULT>>>",
+  '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
+  '  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [1/3] #123",',
+  '                   "head": "$ORCH_BRANCH", "bodyFile": "$ORCH_OUTBOX/pr-body.md" },',
+  '  "comments": [{ "kind": "approve", "bodyFile": "$ORCH_OUTBOX/approve.md" }] }',
+  "<<<END>>>",
+  "JSON",
+].join("\n"));
+fs.chmodSync(recoverCli, 0o755);
+resetState(withWorker(recoverCli, { branchPrefix: "recover/", worktreeRoot: path.join(home, "wt-recover") }));
+run(["state", "set", "org/order-api#125", "--status", "ready", "--set", '{"blockedBy":[],"prs":[]}']);
+// 投稿だけ落ちる
+const broke = run(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { expectExit: 3, env: withGh({ createdPr: 110, prView: { headRefOid: "sha110" }, postCommentFails: true }) });
+check("投稿が落ちたら needs_human で返す", /投稿/.test(broke), true);
+const brokenEntry = json(["state", "get", "org/order-api#125"]).entry;
+check("承認用コメントが無いまま pr-review に進めない", brokenEntry.status === "pr-review", false);
+check("作ったPRは記録されている（作り直さないため）", brokenEntry.prs.map((p) => p.number), [110]);
+check("投稿待ちが残っている", brokenEntry.pendingComments.length, 1);
+check("やることは post-pending になる",
+  json(["next", "--mode", "build"]).items.find((i) => i.key === "org/order-api#125")?.action,
+  "post-pending");
+
+// 投稿だけやり直せば、PRを作り直さずに復旧する
+const recovered = json(["post", "--pending", "--key", "org/order-api#125"],
+  { env: withGh({ postedComment: { id: 9100 } }) });
+check("投稿のやり直しで復旧する", recovered.posted[0].commentId, 9100);
+const fixedEntry = json(["state", "get", "org/order-api#125"]).entry;
+check("復旧後に pr-review へ進む", fixedEntry.status, "pr-review");
+check("PRは1本のまま（作り直していない）", fixedEntry.prs.length, 1);
+check("投稿待ちは空になる", fixedEntry.pendingComments.length, 0);
+
+// --- レビューの結果は round を跨いで使い回さない ---------------------------
+resetState({ review: { maxRounds: 3, onError: "needs-human", steps: [
+  { id: "lint", command: "echo '{\"reviewer\":\"lint\",\"findings\":[]}'" },
+  { id: "memo-check", builtin: "memo-check" },
+] } });
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review", prs: [{ number: 46, order: 1, headSha: "abc", merged: false }],
+})]);
+run(["review", "run", "--key", "org/order-api#123", "--pr", "46"]);
+const memoResult = path.join(home, "memo-check.json");
+fs.writeFileSync(memoResult, JSON.stringify({ reviewer: "memo-check", findings: [] }));
+run(["review", "record", "--key", "org/order-api#123", "--pr", "46",
+  "--step", "memo-check", "--result", memoResult]);
+check("round 1 は全部そろえば pass",
+  json(["review", "status", "--key", "org/order-api#123", "--pr", "46"]).decision, "pass");
+// 2周目を回すと、AI が回す step の前回結果は消える
+run(["review", "run", "--key", "org/order-api#123", "--pr", "46"]);
+const round2 = json(["review", "status", "--key", "org/order-api#123", "--pr", "46"], { expectExit: 3 });
+check("round 2 で未実行の reviewer は pass にしない", round2.decision, "needs-human");
+check("未実行の reviewer を挙げる", round2.incomplete, ["memo-check"]);
+
+// --- 承認用コメントの 😄 でも後回しになる ---------------------------------
+resetState();
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review", commentId: null,
+  prs: [{ number: 46, order: 1, headSha: "abc", merged: false, approvalCommentId: 5500 }],
+})]);
+run(["sync"], { env: withGh({
+  issueList: [],
+  issueView: { updatedAt: "2026-09-12T00:00:00Z", body: "本文" },
+  issueReactions: [],
+  comment: { id: 5500, body: "承認用", updated_at: "2026-09-12T00:00:00Z" },
+  commentReactions: [{ content: "laugh", created_at: "2026-09-13T01:00:00Z", user: { login: "kght6123" } }],
+}) });
+const parkedByPr = json(["state", "get", "org/order-api#123"]).entry;
+check("承認用コメントの 😄 で後回しになる", parkedByPr.status, "parked");
+check("どこで押されたかを覚えている", parkedByPr.parkedBy, "pr-comment");
+check("元の状態を覚えている", parkedByPr.parkedFrom, "pr-review");
+
+// --- レビュアーの割り当て -------------------------------------------------
+const reviewerConfig = {
+  reviewers: { default: { users: ["tanaka", "suzuki"], assign: "one", maxOpenPerReviewer: 2 }, repos: {}, away: [] },
+};
+resetState(reviewerConfig);
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review",
+  prs: [{ number: 46, order: 1, headSha: "abc", merged: false, selfApproved: true }],
+})]);
+check("セルフレビュー済みで未割り当てのPRを出す",
+  json(["assign", "list"]).items.map((i) => i.pr), [46]);
+const assigned = json(["assign", "--key", "org/order-api#123", "--pr", "46"], { env: withGh({}) });
+check("依頼中0件どうしなら設定の並び順の先頭", assigned.reviewer, "tanaka");
+check("state に記録する",
+  json(["state", "get", "org/order-api#123"]).entry.prs[0].reviewer, "tanaka");
+
+// 同じスタックの2本目は同じ人が引き継ぐ
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  prs: [
+    { number: 46, order: 1, headSha: "abc", merged: false, selfApproved: true, reviewer: "tanaka" },
+    { number: 47, order: 2, headSha: "def", merged: false, selfApproved: true },
+  ],
+})]);
+const inherited = json(["assign", "--key", "org/order-api#123", "--pr", "47"], { env: withGh({}) });
+check("同じスタックは同じレビュアーを引き継ぐ", inherited.reviewer, "tanaka");
+check("引き継ぎだと分かる", inherited.inherited, true);
+
+// 別Issueなら件数が少ない方へ回る
+run(["state", "set", "org/order-api#124", "--set", JSON.stringify({
+  status: "pr-review",
+  prs: [{ number: 60, order: 1, headSha: "ghi", merged: false, selfApproved: true }],
+})]);
+check("依頼中が少ない人に回る",
+  json(["assign", "--key", "org/order-api#124", "--pr", "60"], { env: withGh({}) }).reviewer, "suzuki");
+
+// 全員が上限なら保留（エラーではなく「待ち」）
+resetState({ reviewers: { default: { users: ["tanaka"], assign: "one", maxOpenPerReviewer: 1 }, repos: {}, away: [] } });
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review",
+  prs: [
+    { number: 46, order: 1, headSha: "abc", merged: false, selfApproved: true, reviewer: "tanaka" },
+  ],
+})]);
+run(["state", "set", "org/order-api#124", "--set", JSON.stringify({
+  status: "pr-review",
+  prs: [{ number: 61, order: 1, headSha: "jkl", merged: false, selfApproved: true }],
+})]);
+const waiting = json(["assign", "--key", "org/order-api#124", "--pr", "61"], { env: withGh({}) });
+check("全員が上限なら割り当てを保留する", waiting.waiting, true);
+check("保留でも state は汚さない",
+  json(["state", "get", "org/order-api#124"]).entry.prs[0].reviewer ?? null, null);
+
+// away の人は選ばない
+resetState({ reviewers: { default: { users: ["tanaka", "suzuki"], assign: "one", maxOpenPerReviewer: 3 }, repos: {}, away: ["tanaka"] } });
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review",
+  prs: [{ number: 46, order: 1, headSha: "abc", merged: false, selfApproved: true }],
+})]);
+check("away の人は選ばない",
+  json(["assign", "--key", "org/order-api#123", "--pr", "46"], { env: withGh({}) }).reviewer, "suzuki");
 
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} 件が失敗` : "\nすべて成功");

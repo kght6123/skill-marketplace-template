@@ -16,6 +16,7 @@ import { validateResult } from "./review.mjs";
 import { post } from "./post.mjs";
 import { lintPr } from "./lint.mjs";
 import { ghJson, gh, isDryRun } from "./gh.mjs";
+import { verifyClaim } from "./lease.mjs";
 
 const START = "<<<ORCH_RESULT>>>";
 const END = "<<<END>>>";
@@ -46,15 +47,46 @@ function lockPathFor(dir) {
   return `${dir}.lock`;
 }
 
-// 同じIssueに複数のワーカーが来たら、worktree を連番で分ける。
-// slot 1: <repo>-<番号> / orch/<番号>
-// slot 2: <repo>-<番号>-2 / orch/<番号>-2 ...
-function slotPaths(config, key, slot) {
+// 3つの別概念を混ぜない。
+//
+//   予約（lease）        … 同じ Issue/action を2本が処理しない（lease.mjs）
+//   スタックのブランチ    … PR 1本目 / 2本目 / 3本目 を別ブランチにする（branchFor）
+//   worktree の枠        … 同じディレクトリを同時に使わない（slotDir）
+//
+// 以前はブランチを枠の連番から作っていたので、逐次に implement-continue すると
+// 枠1が空いていて同じブランチに戻り、2本目のスタックが作れなかった。
+
+// スタックの何本目かでブランチを決める。枠とは無関係。
+export function branchFor(config, key, order) {
+  const { number } = parseKey(key);
+  return `${config.branchPrefix || "orch/"}${number}/${order}`;
+}
+
+// 枠のディレクトリ。ブランチとは無関係。
+function slotDir(config, key, slot) {
   const { repo, number } = parseKey(key);
-  const suffix = slot === 1 ? "" : `-${slot}`;
+  return path.join(worktreeRoot(config), `${repo}-${number}-slot-${slot}`);
+}
+
+// この action で作業するブランチ（＝スタックの何本目か）を state から決める。
+// ワーカーの申告ではなく、マネージャが state を見て決める。
+export function plannedBranch(config, key, action, state = loadState()) {
+  const entry = state.issues[key];
+  const prs = entry?.prs || [];
+  if (action === "apply-triage") {
+    // 指摘対応は新しいスタックを作らない。対象PRのブランチをそのまま使う
+    const target = prs.find((p) => p.triageApproved && !p.triageApplied) ||
+      [...prs].reverse().find((p) => !p.merged);
+    if (!target) throw new Error(`${key} に指摘対応の対象PRがありません`);
+    return { branch: target.branch || branchFor(config, key, target.order || 1), order: target.order || 1, base: target.base || null };
+  }
+  const order = prs.length + 1;
+  const previous = prs.length ? prs[prs.length - 1] : null;
   return {
-    dir: path.join(worktreeRoot(config), `${repo}-${number}${suffix}`),
-    branch: `${config.branchPrefix || "orch/"}${number}${suffix}`,
+    branch: branchFor(config, key, order),
+    order,
+    // 2本目以降は前のPRのブランチに積む（stacked）。ここもマネージャが決める
+    base: previous ? previous.branch || branchFor(config, key, previous.order || order - 1) : null,
   };
 }
 
@@ -128,14 +160,15 @@ function repoPathOf(config, key) {
 }
 
 // 割り当て先を計算するだけ。作らない（--dry-run 用）。
-export function planWorktree(config, key) {
+export function planWorktree(config, key, action = "implement") {
   const repoPath = repoPathOf(config, key);
   const staleMs = (config.worker?.timeoutMin || 30) * 60_000;
   const maxSlots = Math.max(1, config.limits?.parallelWorkers || 1);
+  const plan = plannedBranch(config, key, action);
   for (let slot = 1; slot <= maxSlots; slot++) {
-    const { dir, branch } = slotPaths(config, key, slot);
+    const dir = slotDir(config, key, slot);
     if (isBusy(dir, staleMs)) continue;
-    return { dir, branch, slot, repoPath, exists: fs.existsSync(dir) };
+    return { dir, branch: plan.branch, base: plan.base, order: plan.order, slot, repoPath, exists: fs.existsSync(dir) };
   }
   throw new Error(
     `${key} の worktree が ${maxSlots} 枠すべて使用中です（実行中か、別の場所で checked out）。limits.parallelWorkers を見てください`,
@@ -143,13 +176,15 @@ export function planWorktree(config, key) {
 }
 
 // 空いている worktree を確保する。リポジトリのクローンはしない（人間が置いたものを使う）。
-export function ensureWorktree(config, key, { lock = false } = {}) {
+export function ensureWorktree(config, key, { lock = false, action = "implement" } = {}) {
   const repoPath = repoPathOf(config, key);
   const staleMs = (config.worker?.timeoutMin || 30) * 60_000;
   const maxSlots = Math.max(1, config.limits?.parallelWorkers || 1);
+  const plan = plannedBranch(config, key, action);
+  const branch = plan.branch;
 
   for (let slot = 1; slot <= maxSlots; slot++) {
-    const { dir, branch } = slotPaths(config, key, slot);
+    const dir = slotDir(config, key, slot);
     // 先に枠を取る。取れなければ他のワーカーのもの
     if (lock) {
       if (!claimSlot(dir, staleMs)) continue;
@@ -168,35 +203,44 @@ export function ensureWorktree(config, key, { lock = false } = {}) {
       }
       const current = execFileSync("git", ["-C", dir, "branch", "--show-current"], git).trim();
       if (current !== branch) {
+        // スタックの次の本数めは、まだブランチが無い。前のPRのブランチから作る
+        const known = execFileSync("git", ["-C", dir, "branch", "--list", branch], git).trim();
+        const args = known
+          ? ["-C", dir, "checkout", branch]
+          : ["-C", dir, "checkout", "-b", branch, ...(plan.base ? [plan.base] : [])];
         try {
-          execFileSync("git", ["-C", dir, "checkout", branch], git);
+          execFileSync("git", args, git);
         } catch (err) {
           if (lock) releaseWorktree(dir);
-          throw new Error(`${dir} を ${branch} に戻せません: ${String(err.stderr || err.message)}`);
+          throw new Error(`${dir} を ${branch} に切り替えられません: ${String(err.stderr || err.message)}`);
         }
       }
-      return { dir, branch, slot, repoPath, reused: true, cleaned: Boolean(dirty) };
+      return { dir, branch, base: plan.base, order: plan.order, slot, repoPath, reused: true, cleaned: Boolean(dirty) };
     }
     {
       fs.mkdirSync(path.dirname(dir), { recursive: true });
       const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
       const exists = execFileSync("git", ["-C", repoPath, "branch", "--list", branch], git).trim();
+      // 2本目以降は前のPRのブランチに積む（stacked）。無ければ既定ブランチから
       const args = exists
         ? ["-C", repoPath, "worktree", "add", dir, branch]
-        : ["-C", repoPath, "worktree", "add", "-b", branch, dir];
+        : ["-C", repoPath, "worktree", "add", "-b", branch, dir, ...(plan.base ? [plan.base] : [])];
       try {
         execFileSync("git", args, git);
       } catch (err) {
-        // そのブランチが別の場所で既に checked out なら、次の連番を試す
+        // そのブランチが既に別の worktree で checked out されている＝
+        // 同じスタックの同じ位置を2本が実装しようとしている。枠を変えても解決しない。
         if (/already used by worktree|already checked out/.test(String(err.stderr || ""))) {
           if (lock) releaseWorktree(dir);
-          continue;
+          throw new Error(
+            `${branch} は既に別の worktree で作業中です。同じスタックの同じPRを2本同時に実装しません（orch next --claim で予約を取ってください）`,
+          );
         }
         if (lock) releaseWorktree(dir);
         throw err;
       }
     }
-    return { dir, branch, slot, repoPath, reused: false, cleaned: false };
+    return { dir, branch, base: plan.base, order: plan.order, slot, repoPath, reused: false, cleaned: false };
   }
   throw new Error(
     `${key} の worktree が ${maxSlots} 枠すべて使用中です（実行中か、別の場所で checked out）。limits.parallelWorkers を見てください`,
@@ -283,10 +327,16 @@ export function parseEnvelope(text, { key, action } = {}) {
 
 // マネージャ側だけが呼ぶ。ロック下で state に反映する。
 // 受け取った値のうち、許可した項目だけを写す（parseEnvelope を通っていても二重に絞る）。
-export function applyEnvelope(data, { action } = {}) {
+export function applyEnvelope(data, { action, lease = null, advanceStatus = true, verify = true, pendingComments = null } = {}) {
   return updateState((state) => {
     const entry = state.issues[data.key];
     if (!entry) throw new Error(`state に未登録: ${data.key}`);
+
+    // 反映する瞬間にも前提を確かめる。走っている間に人間が止めたかもしれない
+    if (verify) {
+      const claim = verifyClaim(state, data.key, { leaseId: lease, action });
+      if (!claim.ok) throw new Error(`結果を反映できません: ${claim.errors.join(" / ")}`);
+    }
 
     for (const incoming of data.prs || []) {
       const fields = Object.fromEntries(
@@ -323,8 +373,14 @@ export function applyEnvelope(data, { action } = {}) {
       }
     }
 
+    if (pendingComments) entry.pendingComments = pendingComments;
+
+    // status を進めるのは、投稿すべきコメントを出し終えてから（advanceStatus）。
+    // 先に pr-review にすると、承認用コメントの投稿が落ちたときに
+    // 「pr-review なのに押すコメントが無い」復旧できない状態が残る。
     if (data.needs_human) setStatus(entry, "needs-human", { workerNotes: data.notes || null });
-    else if (data.status) setStatus(entry, data.status, { workerNotes: data.notes || null });
+    else if (advanceStatus && data.status) setStatus(entry, data.status, { workerNotes: data.notes || null });
+    else if (data.notes) entry.workerNotes = data.notes;
     return { key: data.key, status: entry.status, prs: entry.prs };
   });
 }
@@ -342,7 +398,7 @@ export function buildCommand(worker, prompt) {
 }
 
 // ワーカーを1件起動する。並行させたいときは、マネージャがこれを複数同時に呼ぶ。
-export function runWorker(config, { key, action, promptFile, dryRun = false }) {
+export function runWorker(config, { key, action, promptFile, dryRun = false, lease = null }) {
   if ((config.phase ?? 5) < 4) {
     throw new Error(`phase ${config.phase} では実装を動かしません（実装は phase 4 から）`);
   }
@@ -353,7 +409,7 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
 
   if (dryRun) {
     // --dry-run は副作用なし。worktree もブランチも作らない。
-    const plan = planWorktree(config, key);
+    const plan = planWorktree(config, key, action);
     const shown = buildCommand(worker, "<prompt>");
     return {
       dryRun: true, key, action,
@@ -363,13 +419,15 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
     };
   }
 
-  const { dir, branch, slot } = ensureWorktree(config, key, { lock: true });
+  const { dir, branch, base, order, slot } = ensureWorktree(config, key, { lock: true, action });
   const { command, argv } = buildCommand(worker, prompt);
 
   // ワーカーが本文（PR本文・コメント）を置く場所。1回の起動ごとに作る。
   // ここと worktree の中以外のファイルは、マネージャが本文として読まない。
   const outbox = fs.mkdtempSync(path.join(os.tmpdir(), `orch-outbox-${process.pid}-`));
 
+  // 枠のロックはここでは離さない。エンベロープの bodyFile は worktree の中を指せるので、
+  // 読み終わる前に離すと、別のワーカーが同じ枠を取って reset --hard で消せてしまう。
   let res;
   try {
     res = spawnSync(command, argv, {
@@ -389,50 +447,60 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
         ORCH_OUTBOX: outbox,
       },
     });
-  } finally {
-    releaseWorktree(dir); // 連番の枠を空ける
-  }
-  if (res.error) throw new Error(`ワーカーを起動できません: ${res.error.message}`);
-
-  // 終了コードが 0 でなければ、エンベロープが揃っていても採用しない。
-  // 出力の後で後処理やフックが落ちた可能性があり、部分的な stdout は信用できない。
-  const cleanOutbox = () => fs.rmSync(outbox, { recursive: true, force: true });
-
-  if (res.status !== 0) {
-    cleanOutbox();
-    return {
-      ok: false, key, action, cwd: dir, slot, exitCode: res.status,
-      errors: [`ワーカーが終了コード ${res.status} で終了した`],
-      needs_human: true,
-      stderr: (res.stderr || "").slice(-2000),
-    };
+  } catch (err) {
+    releaseWorktree(dir);
+    fs.rmSync(outbox, { recursive: true, force: true });
+    throw err;
   }
 
-  // ワーカーは信用しない実行主体。key・status・書ける項目をすべて突き合わせる。
-  const envelope = parseEnvelope(res.stdout || "", { key, action });
-  if (!envelope.ok) {
-    cleanOutbox();
-    return {
-      ok: false,
-      key,
-      action,
-      cwd: dir,
-      slot,
-      exitCode: res.status,
-      errors: envelope.errors,
-      needs_human: true,
-      stderr: (res.stderr || "").slice(-2000),
-    };
-  }
+  // 枠と outbox は、本文を読み終えてから片付ける
+  const cleanup = () => {
+    fs.rmSync(outbox, { recursive: true, force: true });
+    releaseWorktree(dir);
+  };
+
   try {
+    if (res.error) throw new Error(`ワーカーを起動できません: ${res.error.message}`);
+
+    // 終了コードが 0 でなければ、エンベロープが揃っていても採用しない。
+    // 出力の後で後処理やフックが落ちた可能性があり、部分的な stdout は信用できない。
+    if (res.status !== 0) {
+      return {
+        ok: false, key, action, cwd: dir, slot, exitCode: res.status,
+        errors: [`ワーカーが終了コード ${res.status} で終了した`],
+        needs_human: true,
+        stderr: (res.stderr || "").slice(-2000),
+      };
+    }
+
+    // ワーカーは信用しない実行主体。key・status・書ける項目をすべて突き合わせる。
+    const envelope = parseEnvelope(res.stdout || "", { key, action });
+    if (!envelope.ok) {
+      return {
+        ok: false,
+        key,
+        action,
+        cwd: dir,
+        slot,
+        exitCode: res.status,
+        errors: envelope.errors,
+        needs_human: true,
+        stderr: (res.stderr || "").slice(-2000),
+      };
+    }
+
     return finishEnvelope(envelope.data, {
       action,
       cwd: dir,
       outbox,
+      lease,
+      expectedBranch: branch,
+      base,
+      order,
       extra: { key, action, cwd: dir, branch, slot, exitCode: res.status },
     });
   } finally {
-    cleanOutbox();
+    cleanup();
   }
 }
 
@@ -440,18 +508,109 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
 //   1. PR を作る（lint を通してから）
 //   2. state に反映する
 //   3. コメントを投稿する（新しいPR宛ては番号を差し替える）
-export function finishEnvelope(data, { action, cwd = null, outbox = null, extra = {} } = {}) {
+export function finishEnvelope(data, {
+  action, cwd = null, outbox = null, lease = null,
+  expectedBranch = null, base = null, order = null, extra = {},
+} = {}) {
   // ワーカーが bodyFile で指せる範囲は、作業した worktree と、
   // マネージャがそのワーカーのために作った受け渡し用ディレクトリ（outbox）だけ。
   // os.tmpdir() 全体を許すと、他プロセスが置いたファイルまで投稿できてしまう。
   const allowedDirs = [cwd, outbox].filter(Boolean);
-  const created = createPullRequest(data, { allowedDirs });
+
+  // 外へ出す前に、開始時の前提がまだ成り立っているかを確かめる。
+  // ここで落とせば、止められた件に対してPRやコメントを作らずに済む。
+  const claim = verifyClaim(loadState(), data.key, { leaseId: lease, action });
+  if (!claim.ok) {
+    return {
+      ok: false, ...extra, needs_human: true,
+      errors: [`結果を反映できません: ${claim.errors.join(" / ")}`],
+      envelope: data,
+    };
+  }
+
+  // 投稿すべきコメントは、外に何かを作る前に state へ預ける。
+  // 途中で落ちても、これが残っていれば orch post --pending でやり直せる。
+  const staged = stageComments(data, { allowedDirs });
+
+  const created = createPullRequest(data, { allowedDirs, expectedBranch, base });
   const withPr = created
-    ? { ...data, prs: [...(data.prs || []), { number: created.number, branch: data.pullRequest.head }] }
+    ? {
+        ...data,
+        prs: [
+          ...(data.prs || []),
+          {
+            number: created.number,
+            branch: expectedBranch || data.pullRequest.head,
+            ...(created.headSha ? { headSha: created.headSha } : {}),
+            ...(order ? { order } : {}),
+            ...(base ? { base } : {}),
+          },
+        ],
+      }
     : data;
-  const applied = applyEnvelope(withPr, { action });
-  const posted = postEnvelopeComments(data, { newPrNumber: created?.number ?? null, allowedDirs });
-  return { ok: true, ...extra, createdPr: created, applied, posted, envelope: data };
+
+  // ここでは status を進めない。PR と預けたコメントだけを記録する
+  const applied = applyEnvelope(withPr, {
+    action, lease, advanceStatus: false,
+    pendingComments: staged.map((c) => ({ ...c, pr: c.pr ?? created?.number ?? null })),
+  });
+
+  // コメントを投稿し、全部通ってから status を進める
+  const flushed = flushPendingComments(data.key);
+  if (!flushed.ok) {
+    return {
+      ok: false, ...extra, createdPr: created, applied, needs_human: true,
+      errors: flushed.errors,
+      hint: "投稿だけが残っています。orch post --pending --key <key> でやり直せます（PRは作り直しません）",
+      envelope: data,
+    };
+  }
+
+  const advanced = applyEnvelope(withPr, { action, lease, verify: false });
+  return {
+    ok: true, ...extra,
+    createdPr: created, applied: advanced, posted: flushed.posted, envelope: data,
+  };
+}
+
+// 投稿予定のコメントを本文ごと state に預ける（ファイルは消えるのでテキストで持つ）
+function stageComments(data, { allowedDirs = [] } = {}) {
+  return (data.comments || []).map((c) => {
+    const { file, temp } = bodyToFile(c.body, c.bodyFile, "comment", allowedDirs);
+    try {
+      return { kind: c.kind, pr: typeof c.pr === "number" ? c.pr : null, body: fs.readFileSync(file, "utf8") };
+    } finally {
+      if (temp) fs.rmSync(temp, { force: true });
+    }
+  });
+}
+
+// 預けたコメントを投稿し、成功したものから state から消す。
+// 全部通るまで status は進まないので、途中で落ちても同じ関数で再開できる。
+export function flushPendingComments(key) {
+  const pending = loadState().issues[key]?.pendingComments || [];
+  const posted = [];
+  const errors = [];
+  for (const c of pending) {
+    const temp = path.join(os.tmpdir(), `orch-pending-${process.pid}-${Date.now()}.md`);
+    fs.writeFileSync(temp, c.body);
+    try {
+      const result = post({ key, kind: c.kind, bodyFile: temp, pr: c.pr });
+      posted.push({ kind: c.kind, pr: c.pr ?? null, commentId: result.commentId });
+      updateState((state) => {
+        const entry = state.issues[key];
+        entry.pendingComments = (entry.pendingComments || []).filter(
+          (x) => !(x.kind === c.kind && x.pr === c.pr),
+        );
+        return true;
+      });
+    } catch (err) {
+      errors.push(`${c.kind}: ${String(err.message || err)}`);
+    } finally {
+      fs.rmSync(temp, { force: true });
+    }
+  }
+  return { ok: errors.length === 0, posted, errors, remaining: loadState().issues[key]?.pendingComments || [] };
 }
 
 // ワーカーが指し示してよいファイルの範囲。
@@ -485,10 +644,15 @@ function bodyToFile(entryBody, entryFile, tag, allowedDirs) {
 
 // PR はマネージャが作る。作る前に PR本文の lint を通す。
 // ワーカー側で作らせると、テンプレートの上限をすり抜けられる。
-export function createPullRequest(data, { allowedDirs = [] } = {}) {
+export function createPullRequest(data, { allowedDirs = [], expectedBranch = null, base = null } = {}) {
   const want = data.pullRequest;
   if (!want) return null;
   const { nameWithOwner } = parseKey(data.key);
+  // head はマネージャが割り当てたブランチでなければならない。
+  // ワーカーの申告をそのまま使うと、別のスタックのブランチからPRを作れる。
+  if (expectedBranch && want.head !== expectedBranch) {
+    throw new Error(`pullRequest.head が割り当てたブランチと違う（割り当て: ${expectedBranch} / 返答: ${want.head}）`);
+  }
   const { file, temp } = bodyToFile(want.body, want.bodyFile, "pr-body", allowedDirs);
   try {
     const checked = lintPr(fs.readFileSync(file, "utf8"), { title: want.title });
@@ -501,33 +665,24 @@ export function createPullRequest(data, { allowedDirs = [] } = {}) {
     if (isDryRun()) return { number: 0, dryRun: true };
     const args = [
       "pr", "create", "--repo", nameWithOwner,
-      "--head", want.head, "--title", want.title, "--body-file", file,
+      "--head", expectedBranch || want.head, "--title", want.title, "--body-file", file,
     ];
-    if (want.base) args.push("--base", want.base);
+    // base もマネージャが state から決める（2本目以降は前のPRのブランチ）
+    const baseBranch = base ?? want.base;
+    if (baseBranch) args.push("--base", baseBranch);
     if (want.draft) args.push("--draft");
     const out = gh(args) || "";
     const number = Number((out.trim().match(/\/pull\/(\d+)/) || [])[1]);
     if (!Number.isFinite(number) || number <= 0) {
       throw new Error(`PRの番号を読み取れない: ${out.trim().slice(0, 200)}`);
     }
-    return { number, url: out.trim() };
+    // head SHA はここで取る。次の sync を待つと、その間の承認スタンプが
+    // 「どのコミットへの承認か」を決められずマージ判定が1周遅れる
+    const view = ghJson(["pr", "view", String(number), "--repo", nameWithOwner, "--json", "headRefOid"],
+      { allowFail: true });
+    return { number, url: out.trim(), headSha: view?.headRefOid || null };
   } finally {
     if (temp) fs.rmSync(temp, { force: true });
   }
 }
 
-// エンベロープの comments を投稿し、commentId を state に記録する
-export function postEnvelopeComments(data, { newPrNumber = null, allowedDirs = [] } = {}) {
-  const posted = [];
-  for (const c of data.comments || []) {
-    const { file, temp } = bodyToFile(c.body, c.bodyFile, "comment", allowedDirs);
-    const prNumber = typeof c.pr === "number" ? c.pr : newPrNumber;
-    try {
-      const result = post({ key: data.key, kind: c.kind, bodyFile: file, pr: prNumber });
-      posted.push({ kind: c.kind, pr: prNumber ?? null, commentId: result.commentId });
-    } finally {
-      if (temp) fs.rmSync(temp, { force: true });
-    }
-  }
-  return posted;
-}

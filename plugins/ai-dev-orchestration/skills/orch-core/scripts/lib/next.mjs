@@ -80,6 +80,9 @@ export function sizeOf(entry, config) {
 
 // AI が次に生成すべきもの。null なら AI の出番ではない。
 export function workAction(entry, config) {
+  // 投稿だけが残っている件が最優先。承認用コメントが無いまま先へ進めると、
+  // 人間がスタンプを押す相手が居ない状態で止まる
+  if ((entry.pendingComments || []).length) return "post-pending";
   switch (entry.status) {
     case "sizing":
       if (!entry.sizing) return "sizing";
@@ -110,8 +113,8 @@ export function workAction(entry, config) {
   }
 }
 
-const MEMO_ACTIONS = ["sizing", "split", "memo", "memo-update", "memo-redo", "split-redo", "create-children"];
-const BUILD_ACTIONS = ["implement", "implement-continue", "apply-triage"];
+const MEMO_ACTIONS = ["sizing", "split", "memo", "memo-update", "memo-redo", "split-redo", "create-children", "post-pending"];
+const BUILD_ACTIONS = ["implement", "implement-continue", "apply-triage", "post-pending"];
 
 // その action が人間待ちの行列を1つ増やすか。増やすものだけ枠を消費する。
 // 作り直し（redo）は同じ status に留まるので増えない。

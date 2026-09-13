@@ -41,6 +41,7 @@ Claude Code 固有の機能は使わない。ワーカーのCLIは差し替え�
 7. **ワーカーは外に何も作らない**。worktree作成・PR作成（`gh pr create`）・コメント投稿はすべてマネージャ。ワーカーは頼むだけ
 8. **ワーカーの終了コードが 0 でなければ、エンベロープがあっても採用しない**。出力の後で落ちた可能性があるため
 9. **マネージャを並行させるなら `orch next --claim`**。予約を取らずに選ぶと、同じ Issue を2本が処理して WIP も超える
+10. **ブランチ名を自分で決めない**。スタックの何本目かはマネージャが state から決め、`ORCH_BRANCH` で渡す
 
 ---
 
@@ -86,6 +87,8 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 | `orch worker --key K --action A --prompt f` | 各リポジトリの worktree でワーカーを起動する |
 | `orch apply --file f [--cwd d]` | ワーカーの結果エンベロープを反映する（PR作成 → state → コメント投稿） |
 | `orch lease list\|release\|reap` | 論理タスクの予約。二重実行と WIP 超過を防ぐ |
+| `orch assign --key K --pr N` | レビュアーを決めて依頼を送る（依頼中件数が最少／スタックは引き継ぐ） |
+| `orch post --pending --key K` | 投稿だけ残っている件のやり直し。PRは作り直さない |
 | `orch conflict --files a,b` | 競合を自動解決とhuman確認に分類 |
 
 詳しい引数は `node "$ORCH"` を引数なしで実行すると出る。
