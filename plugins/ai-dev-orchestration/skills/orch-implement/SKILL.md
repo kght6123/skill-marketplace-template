@@ -30,6 +30,7 @@ worktree を作らない・state.json を書かない・コメントを投稿し
 
 **本文のファイルは `$ORCH_OUTBOX` か worktree の中に置く。** それ以外の場所を `bodyFile` に書くと
 マネージャが読まずに止まる（ワーカーが任意のファイルを投稿できると危ないため）。
+symlink も拒否される。実体のファイルを置く。
 
 スクリプトの場所と実行の鉄則は `orch-core/SKILL.md`、役割の境界は `orch-core/references/topology.md`。
 
@@ -82,6 +83,10 @@ pwd && git branch --show-current   # = $ORCH_BRANCH
 `orch review` は state を書くのでワーカーからは使えない。設定された step を自分で実行し、
 結果をエンベロープの `review` に入れて返す。記録するのはマネージャ。
 step の種類と共通の出力形式は `references/review-pipeline.md`。
+
+**設定された step を1つも飛ばさない。** マネージャは設定から「今回必要な step」を自分で計算し、
+足りなければPRを作らずに止める（`memo-check` は設定から外しても必須）。
+返す `review` の `reviewer` は、設定の `step.id` と同じ名前にする。
 
 `block` が出たら直す。2回直しても消えなければ `needs_human: true` で返して止める。
 自分のコードを自分で見ると通ってしまうので、`memo-check` は `orch-memo-check` スキルで

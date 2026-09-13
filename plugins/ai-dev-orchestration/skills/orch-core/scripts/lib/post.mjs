@@ -51,7 +51,11 @@ function collapse(nameWithOwner, commentId) {
   fs.unlinkSync(tmp);
 }
 
-export function post({ key, kind, bodyFile, pr, update }) {
+// advanceStatus=false は「コメントは投稿するが status は動かさない」。
+// ワーカーの結果を反映する経路では、投稿の後にもう一度 CAS してから status を進める。
+// post が無条件に status を動かすと、投稿している間に人間が押した
+// 後回し／needs-human を上書きしてしまう。
+export function post({ key, kind, bodyFile, pr, update, advanceStatus = true }) {
   if (!KINDS.includes(kind)) throw new Error(`--kind は ${KINDS.join(" / ")} のいずれか`);
   if (!fs.existsSync(bodyFile)) throw new Error(`本文ファイルが無い: ${bodyFile}`);
   const body = fs.readFileSync(bodyFile, "utf8");
@@ -112,21 +116,27 @@ export function post({ key, kind, bodyFile, pr, update }) {
       entry.commentId = result.id;
       entry.redo = null;
       entry.answersReady = false;
-      setStatus(entry, intendedStatus);
-      transition.to = intendedStatus;
+      if (advanceStatus) {
+        setStatus(entry, intendedStatus);
+        transition.to = intendedStatus;
+      }
     } else if (kind === "split") {
       entry.commentId = result.id;
       entry.redo = null;
-      setStatus(entry, "split-review");
-      transition.to = "split-review";
+      if (advanceStatus) {
+        setStatus(entry, "split-review");
+        transition.to = "split-review";
+      }
     } else if (kind === "approve") {
       const target = (entry.prs || []).find((p) => p.number === Number(pr));
       if (!target) throw new Error(`PR #${pr} が state に無い`);
       target.approvalCommentId = result.id;
       target.selfApproved = false;
       target.approvedSha = target.headSha;
-      setStatus(entry, "pr-review");
-      transition.to = "pr-review";
+      if (advanceStatus) {
+        setStatus(entry, "pr-review");
+        transition.to = "pr-review";
+      }
     } else if (kind === "triage") {
       const target = (entry.prs || []).find((p) => p.number === Number(pr));
       if (!target) throw new Error(`PR #${pr} が state に無い`);

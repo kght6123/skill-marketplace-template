@@ -266,6 +266,16 @@ lint が通らなければPRは作らず、そのIssueは止まる。
 そのまま読むと、`/etc/passwd` のようなファイルをコメントとして投稿させられるため、
 範囲外を指していたらエラーで止まる。手で回す場合は `orch apply --cwd <worktree>` で範囲を渡す。
 
+判定は**実体（realpath）**で行い、symlink そのものを拒否する。パスの文字列だけを見ると
+`ln -s /etc/passwd ./approve.md` で「worktree の中」を指したまま外のファイルを読ませられる。
+`$ORCH_OUTBOX` 自体が symlink に差し替えられていないかも毎回確かめる。
+
+### AIレビューの完了もマネージャが確かめる
+
+`review.steps` のうち、この変更で必要なもの（`when.paths` に当たるもの＋必須の `memo-check`）が
+1つでも欠けていたらPRを作らない。変更ファイルはマネージャが `git diff` で自分で数える。
+ワーカーの申告から `when.paths` を評価すると、対象ファイルを隠して security レビューを飛ばせる。
+
 `comments` は「マネージャに投稿してほしいコメント」。ワーカーは投稿できないので、本文だけを返す。
 マネージャは `orch post --key … --kind approve --pr 50 --body <bodyFile>` で投稿する。
 新しく作るPR宛てのコメントは `pr` を省いてよい。マネージャが作成後の番号に差し替える。

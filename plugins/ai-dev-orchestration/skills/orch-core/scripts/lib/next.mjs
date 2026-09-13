@@ -82,7 +82,7 @@ export function sizeOf(entry, config) {
 export function workAction(entry, config) {
   // 投稿だけが残っている件が最優先。承認用コメントが無いまま先へ進めると、
   // 人間がスタンプを押す相手が居ない状態で止まる
-  if ((entry.pendingComments || []).length) return "post-pending";
+  if (entry.pendingApply) return "post-pending";
   switch (entry.status) {
     case "sizing":
       if (!entry.sizing) return "sizing";

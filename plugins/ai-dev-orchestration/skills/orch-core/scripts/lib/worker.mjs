@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { repoConfig, worktreeRoot } from "./config.mjs";
 import { loadState, updateState, setStatus, parseKey, STATUSES, processIsAlive } from "./state.mjs";
-import { validateResult } from "./review.mjs";
+import { validateResult, missingSteps } from "./review.mjs";
 import { post } from "./post.mjs";
 import { lintPr } from "./lint.mjs";
 import { ghJson, gh, isDryRun } from "./gh.mjs";
@@ -176,6 +176,26 @@ export function planWorktree(config, key, action = "implement") {
 }
 
 // 空いている worktree を確保する。リポジトリのクローンはしない（人間が置いたものを使う）。
+// スタックの分岐元が手元に無いことがある（マージ後に消された・別のマシンから
+// push された）。無い参照を start point にすると worktree add ごと落ちるので、
+// 既定ブランチへ落とす。base が分からないまま黙って main から切らない。
+function resolveStart(repoPath, base, config) {
+  const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+  const exists = (ref) => {
+    if (!ref) return false;
+    try {
+      execFileSync("git", ["-C", repoPath, "rev-parse", "--verify", "--quiet", ref], git);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (exists(base)) return { start: base, fellBack: false };
+  const fallback = config.defaultBranch || "main";
+  if (exists(fallback)) return { start: fallback, fellBack: Boolean(base) };
+  return { start: null, fellBack: Boolean(base) };
+}
+
 export function ensureWorktree(config, key, { lock = false, action = "implement" } = {}) {
   const repoPath = repoPathOf(config, key);
   const staleMs = (config.worker?.timeoutMin || 30) * 60_000;
@@ -205,9 +225,10 @@ export function ensureWorktree(config, key, { lock = false, action = "implement"
       if (current !== branch) {
         // スタックの次の本数めは、まだブランチが無い。前のPRのブランチから作る
         const known = execFileSync("git", ["-C", dir, "branch", "--list", branch], git).trim();
+        const from = resolveStart(dir, plan.base, config);
         const args = known
           ? ["-C", dir, "checkout", branch]
-          : ["-C", dir, "checkout", "-b", branch, ...(plan.base ? [plan.base] : [])];
+          : ["-C", dir, "checkout", "-b", branch, ...(from.start ? [from.start] : [])];
         try {
           execFileSync("git", args, git);
         } catch (err) {
@@ -221,10 +242,11 @@ export function ensureWorktree(config, key, { lock = false, action = "implement"
       fs.mkdirSync(path.dirname(dir), { recursive: true });
       const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
       const exists = execFileSync("git", ["-C", repoPath, "branch", "--list", branch], git).trim();
-      // 2本目以降は前のPRのブランチに積む（stacked）。無ければ既定ブランチから
+      // 2本目以降は前のPRのブランチに積む（stacked）。手元に無ければ既定ブランチから
+      const from = resolveStart(repoPath, plan.base, config);
       const args = exists
         ? ["-C", repoPath, "worktree", "add", dir, branch]
-        : ["-C", repoPath, "worktree", "add", "-b", branch, dir, ...(plan.base ? [plan.base] : [])];
+        : ["-C", repoPath, "worktree", "add", "-b", branch, dir, ...(from.start ? [from.start] : [])];
       try {
         execFileSync("git", args, git);
       } catch (err) {
@@ -327,7 +349,7 @@ export function parseEnvelope(text, { key, action } = {}) {
 
 // マネージャ側だけが呼ぶ。ロック下で state に反映する。
 // 受け取った値のうち、許可した項目だけを写す（parseEnvelope を通っていても二重に絞る）。
-export function applyEnvelope(data, { action, lease = null, advanceStatus = true, verify = true, pendingComments = null } = {}) {
+export function applyEnvelope(data, { action, lease = null, advanceStatus = true, verify = true, pendingApply = null } = {}) {
   return updateState((state) => {
     const entry = state.issues[data.key];
     if (!entry) throw new Error(`state に未登録: ${data.key}`);
@@ -373,7 +395,7 @@ export function applyEnvelope(data, { action, lease = null, advanceStatus = true
       }
     }
 
-    if (pendingComments) entry.pendingComments = pendingComments;
+    if (pendingApply) entry.pendingApply = pendingApply;
 
     // status を進めるのは、投稿すべきコメントを出し終えてから（advanceStatus）。
     // 先に pr-review にすると、承認用コメントの投稿が落ちたときに
@@ -383,6 +405,19 @@ export function applyEnvelope(data, { action, lease = null, advanceStatus = true
     else if (data.notes) entry.workerNotes = data.notes;
     return { key: data.key, status: entry.status, prs: entry.prs };
   });
+}
+
+// この作業ブランチで何を変えたか。マネージャが自分で git に聞く。
+// ワーカーの申告から when.paths を評価すると、対象ファイルを隠して
+// security レビューを飛ばせてしまう。
+export function changedFiles(dir, base) {
+  const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+  try {
+    const out = execFileSync("git", ["-C", dir, "diff", "--name-only", `${base}...HEAD`], git);
+    return out.split("\n").map((l) => l.trim()).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 // 起動コマンドを組み立てる。{prompt} があればその位置に差し込み、無ければ末尾に足す。
@@ -497,6 +532,7 @@ export function runWorker(config, { key, action, promptFile, dryRun = false, lea
       expectedBranch: branch,
       base,
       order,
+      config,
       extra: { key, action, cwd: dir, branch, slot, exitCode: res.status },
     });
   } finally {
@@ -510,12 +546,12 @@ export function runWorker(config, { key, action, promptFile, dryRun = false, lea
 //   3. コメントを投稿する（新しいPR宛ては番号を差し替える）
 export function finishEnvelope(data, {
   action, cwd = null, outbox = null, lease = null,
-  expectedBranch = null, base = null, order = null, extra = {},
+  expectedBranch = null, base = null, order = null, config = null, extra = {},
 } = {}) {
   // ワーカーが bodyFile で指せる範囲は、作業した worktree と、
   // マネージャがそのワーカーのために作った受け渡し用ディレクトリ（outbox）だけ。
   // os.tmpdir() 全体を許すと、他プロセスが置いたファイルまで投稿できてしまう。
-  const allowedDirs = [cwd, outbox].filter(Boolean);
+  const allowedDirs = [cwd, outbox].filter(Boolean).map((d) => assertRealDir(d, "受け渡し先"));
 
   // 外へ出す前に、開始時の前提がまだ成り立っているかを確かめる。
   // ここで落とせば、止められた件に対してPRやコメントを作らずに済む。
@@ -528,8 +564,26 @@ export function finishEnvelope(data, {
     };
   }
 
-  // 投稿すべきコメントは、外に何かを作る前に state へ預ける。
-  // 途中で落ちても、これが残っていれば orch post --pending でやり直せる。
+  // 設定された AI レビューを1つでも飛ばしていたらPRを作らない。
+  // ワーカーが review を空で返しても通っていた（security を丸ごと飛ばせた）。
+  if (config && data.pullRequest) {
+    const files = cwd ? changedFiles(cwd, base || config.defaultBranch || "main") : [];
+    const missing = missingSteps(config, data.review || [], files);
+    if (missing.length) {
+      return {
+        ok: false, ...extra, needs_human: true,
+        errors: [`AIレビューが足りない: ${missing.join(" / ")}（設定された step をすべて回してください）`],
+        changedFiles: files,
+        envelope: data,
+      };
+    }
+  }
+
+  // 投稿すべきコメントと「最終的にどの status にするつもりだったか」を、
+  // 外に何かを作る前に state へ預ける。途中で落ちても、これが残っていれば
+  // orch post --pending で、PRを作り直さず同じ遷移をやり直せる。
+  // コメントの種類から status を逆算しない（approve だからといって
+  // pr-review とは限らない。スタックの途中なら implementing のまま進む）。
   const staged = stageComments(data, { allowedDirs });
 
   const created = createPullRequest(data, { allowedDirs, expectedBranch, base });
@@ -549,14 +603,19 @@ export function finishEnvelope(data, {
       }
     : data;
 
-  // ここでは status を進めない。PR と預けたコメントだけを記録する
+  // ここでは status を進めない。PR と、やり残しの内容だけを記録する
   const applied = applyEnvelope(withPr, {
     action, lease, advanceStatus: false,
-    pendingComments: staged.map((c) => ({ ...c, pr: c.pr ?? created?.number ?? null })),
+    pendingApply: {
+      action,
+      leaseId: lease,
+      finalStatus: data.needs_human ? "needs-human" : data.status || null,
+      comments: staged.map((c) => ({ ...c, pr: c.pr ?? created?.number ?? null })),
+    },
   });
 
   // コメントを投稿し、全部通ってから status を進める
-  const flushed = flushPendingComments(data.key);
+  const flushed = flushPending(data.key);
   if (!flushed.ok) {
     return {
       ok: false, ...extra, createdPr: created, applied, needs_human: true,
@@ -566,10 +625,9 @@ export function finishEnvelope(data, {
     };
   }
 
-  const advanced = applyEnvelope(withPr, { action, lease, verify: false });
   return {
     ok: true, ...extra,
-    createdPr: created, applied: advanced, posted: flushed.posted, envelope: data,
+    createdPr: created, applied: flushed.applied, posted: flushed.posted, envelope: data,
   };
 }
 
@@ -585,23 +643,31 @@ function stageComments(data, { allowedDirs = [] } = {}) {
   });
 }
 
-// 預けたコメントを投稿し、成功したものから state から消す。
-// 全部通るまで status は進まないので、途中で落ちても同じ関数で再開できる。
-export function flushPendingComments(key) {
-  const pending = loadState().issues[key]?.pendingComments || [];
+// 預けたコメントを投稿し、成功したものから state の控えを消す。
+// 全部通ってから、預けておいた最終 status を CAS で適用する。
+//
+// 投稿している間に人間が 😄 や needs-human を押しているかもしれないので、
+// 最後の遷移は必ず検証つきで行う。ここを verify なしにすると、
+// 「PR作成直前までは守られるが、投稿中の数秒は上書きできる」穴が残る。
+export function flushPending(key) {
+  const pending = loadState().issues[key]?.pendingApply;
+  if (!pending) return { ok: true, posted: [], applied: null, nothingToDo: true };
+
   const posted = [];
   const errors = [];
-  for (const c of pending) {
+  for (const c of pending.comments || []) {
     const temp = path.join(os.tmpdir(), `orch-pending-${process.pid}-${Date.now()}.md`);
     fs.writeFileSync(temp, c.body);
     try {
-      const result = post({ key, kind: c.kind, bodyFile: temp, pr: c.pr });
+      // ここでは status を動かさない。遷移はすべて終わってから1回だけ
+      const result = post({ key, kind: c.kind, bodyFile: temp, pr: c.pr, advanceStatus: false });
       posted.push({ kind: c.kind, pr: c.pr ?? null, commentId: result.commentId });
       updateState((state) => {
         const entry = state.issues[key];
-        entry.pendingComments = (entry.pendingComments || []).filter(
+        const rest = (entry.pendingApply?.comments || []).filter(
           (x) => !(x.kind === c.kind && x.pr === c.pr),
         );
+        entry.pendingApply = { ...entry.pendingApply, comments: rest };
         return true;
       });
     } catch (err) {
@@ -610,26 +676,81 @@ export function flushPendingComments(key) {
       fs.rmSync(temp, { force: true });
     }
   }
-  return { ok: errors.length === 0, posted, errors, remaining: loadState().issues[key]?.pendingComments || [] };
+  if (errors.length) {
+    return { ok: false, posted, errors, applied: null };
+  }
+
+  // 投稿が全部通った。ここで初めて status を進める（予約と status を再確認して）
+  try {
+    const applied = updateState((state) => {
+      const entry = state.issues[key];
+      const plan = entry.pendingApply;
+      const claim = verifyClaim(state, key, { leaseId: plan?.leaseId || null, action: plan?.action });
+      if (!claim.ok) throw new Error(claim.errors.join(" / "));
+      if (plan?.finalStatus) setStatus(entry, plan.finalStatus);
+      entry.pendingApply = null;
+      return { key, status: entry.status, prs: entry.prs };
+    });
+    return { ok: true, posted, errors: [], applied };
+  } catch (err) {
+    // 投稿は済んでいるが、その間に人間が止めた。status は動かさない
+    return {
+      ok: false, posted, applied: null,
+      errors: [`投稿は終わりましたが status を進められません: ${String(err.message || err)}`],
+      postedButNotAdvanced: true,
+    };
+  }
 }
 
 // ワーカーが指し示してよいファイルの範囲。
 //
 // bodyFile はワーカーが決めた文字列なので、そのまま読むと
 // /etc/passwd のようなファイルを GitHub のコメントとして投稿させられる。
-// 読んでよいのは「ワーカーが作業した worktree の中」と「一時ディレクトリの中」だけ。
+// 読んでよいのは「ワーカーが作業した worktree の中」と「受け渡し用の outbox の中」だけ。
 function assertInsideAllowed(file, allowedDirs, what) {
-  const resolved = path.resolve(file);
-  const ok = allowedDirs
-    .filter(Boolean)
-    .map((d) => path.resolve(d))
-    .some((dir) => resolved === dir || resolved.startsWith(dir + path.sep));
+  const dirs = allowedDirs.filter(Boolean);
+  if (!dirs.length) throw new Error(`${what} のファイルを読める場所がありません`);
+
+  // 文字列のパスだけを見ると symlink で抜けられる。
+  // ワーカーは worktree の中に自由にファイルを作れるので、
+  //   ln -s /etc/passwd ./approve.md
+  // とすれば「worktree の中」を指したまま任意のファイルを投稿できてしまう。
+  // symlink そのものを拒否し、実体（realpath）でも範囲を確かめる。
+  let info;
+  try {
+    info = fs.lstatSync(file);
+  } catch {
+    throw new Error(`${what} のファイルがありません: ${file}`);
+  }
+  if (info.isSymbolicLink()) {
+    throw new Error(`${what} のファイルが symlink です: ${file}（実体を置いてください）`);
+  }
+  if (!info.isFile()) throw new Error(`${what} が通常のファイルではありません: ${file}`);
+
+  const realFile = fs.realpathSync(file);
+  const realDirs = dirs.map((d) => {
+    try {
+      return fs.realpathSync(d);
+    } catch {
+      return path.resolve(d);
+    }
+  });
+  const ok = realDirs.some((dir) => realFile === dir || realFile.startsWith(dir + path.sep));
   if (!ok) {
     throw new Error(
-      `${what} のファイルが許可された場所の外にあります: ${resolved}（許可: ${allowedDirs.filter(Boolean).join(" / ")}）`,
+      `${what} のファイルが許可された場所の外にあります: ${realFile}（許可: ${realDirs.join(" / ")}）`,
     );
   }
-  return resolved;
+  return realFile;
+}
+
+// outbox は毎回マネージャが作る。ワーカーが symlink に差し替えていないかを確かめる。
+function assertRealDir(dir, what) {
+  if (!dir) return null;
+  const info = fs.lstatSync(dir);
+  if (info.isSymbolicLink()) throw new Error(`${what} が symlink に差し替えられています: ${dir}`);
+  if (!info.isDirectory()) throw new Error(`${what} がディレクトリではありません: ${dir}`);
+  return fs.realpathSync(dir);
 }
 
 // 本文をファイルに落とす（インラインで来た場合）

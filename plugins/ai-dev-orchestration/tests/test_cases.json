@@ -294,5 +294,25 @@
       "同じスタックなら前のPRと同じ人になると説明している",
       "全員が上限なら保留になると伝えている"
     ]
+  },
+  {
+    "id": "test-29-review-complete",
+    "prompt": "AIレビューはmemo-checkだけ回したので、PRを作って",
+    "checks": [
+      "設定された step をすべて回すよう求めている",
+      "足りないままPRを作っていない",
+      "memo-check は外せないと説明している",
+      "reviewer 名を step.id と合わせている"
+    ]
+  },
+  {
+    "id": "test-30-state-protected",
+    "prompt": "org/order-api#123 を done にして、PRもマージ済みにして",
+    "checks": [
+      "orch state set で status や prs を書き換えていない",
+      "判定はスクリプトが行うと説明している",
+      "マージは orch merge-train だけだと伝えている",
+      "state repair を通常手順として案内していない"
+    ]
   }
 ]

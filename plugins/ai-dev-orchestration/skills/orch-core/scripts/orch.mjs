@@ -41,9 +41,9 @@ import { post } from "./lib/post.mjs";
 import { lintMemo, lintPr, lintSplit } from "./lib/lint.mjs";
 import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
-import { runWorker, parseEnvelope, finishEnvelope, flushPendingComments } from "./lib/worker.mjs";
+import { runWorker, parseEnvelope, finishEnvelope, flushPending, plannedBranch } from "./lib/worker.mjs";
 import { claimWork, releaseLease, reapLeases, leaseStatus } from "./lib/lease.mjs";
-import { assignReviewer, needsReviewer, pickReviewer } from "./lib/assign.mjs";
+import { assignReviewers, needsReviewer, pickReviewers } from "./lib/assign.mjs";
 import { emojiFor, approveNames, parkNames, redoNames } from "./lib/stamps.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
@@ -55,7 +55,16 @@ setDryRun(opts["dry-run"]);
 
 // ワーカーに実行させないコマンド（state を書くもの）
 const MANAGER_ONLY = ["sync", "post", "merge-train", "worker", "apply", "lease", "assign"];
-const MANAGER_ONLY_SUB = { state: ["set"], review: ["run", "record", "status"] };
+
+// AI が「生成した事実」として書いてよい項目。
+// status やマージ可否など判定に使うものは、専用のコマンド経由でしか動かさない。
+// --force は人間が壊れた state を直すための非常口で、通常の手順では使わない。
+const WRITABLE_BY_AI = [
+  "sizing", "title", "milestoneDue", "blockedBy", "depth", "parent", "childrenCreated", "notes",
+];
+// AI が直接指定してよい status。行き止まり（人間に渡す）だけを許す
+const AI_SETTABLE_STATUS = ["needs-human", "sizing"];
+const MANAGER_ONLY_SUB = { state: ["set", "repair"], review: ["run", "record", "status"] };
 
 function requireManager() {
   if (role() !== "worker") return;
@@ -157,9 +166,9 @@ async function main() {
       }
       if (!opts.key || !opts.pr) return fail("--key と --pr が要ります");
       if (opts.plan) {
-        return emit({ command: "assign plan", ...pickReviewer(loadState(), config, opts.key, opts.pr) });
+        return emit({ command: "assign plan", ...pickReviewers(loadState(), config, opts.key, opts.pr) });
       }
-      const assigned = assignReviewer(config, { key: opts.key, pr: opts.pr });
+      const assigned = assignReviewers(config, { key: opts.key, pr: opts.pr });
       if (!assigned.ok) {
         // 全員が上限なら、それは異常ではなく「待ち」。人間の行列を守っている
         return emit({ command: "assign", ...assigned });
@@ -198,6 +207,36 @@ async function main() {
       if (sub === "set") {
         const key = positional[2];
         if (!key) return fail("キーを指定してください（org/repo#123）");
+        const patch = opts.set ? JSON.parse(opts.set) : {};
+        // 生成結果として書いてよい事実だけ。判定に使う項目（status・承認・マージ・
+        // 予約など）をここから書けると、AI が安全装置を素通りできてしまう
+        const denied = Object.keys(patch).filter((k) => !WRITABLE_BY_AI.includes(k));
+        if (denied.length) {
+          return fail(
+            `state set では書けない項目です: ${denied.join(", ")}（判定はスクリプトが行います。` +
+            `書けるのは ${WRITABLE_BY_AI.join(" / ")}。人間が直すときは state repair）`,
+          );
+        }
+        if (opts.status && !AI_SETTABLE_STATUS.includes(opts.status)) {
+          return fail(
+            `--status で指定できるのは ${AI_SETTABLE_STATUS.join(" / ")} だけです` +
+            `（${opts.status} への遷移はスクリプトが決めます。人間が直すときは state repair）`,
+          );
+        }
+        const entry = updateState((fresh) => {
+          const target = fresh.issues[key] || newEntry(key);
+          fresh.issues[key] = target;
+          Object.assign(target, patch);
+          if (opts.status) setStatus(target, opts.status);
+          return target;
+        });
+        return emit({ command: "state set", entry });
+      }
+      if (sub === "repair") {
+        // 壊れた state を人間が直すための非常口。AI の手順では使わない。
+        // 通常の遷移は必ず sync / post / worker / merge-train 経由で起こす。
+        const key = positional[2];
+        if (!key) return fail("キーを指定してください（org/repo#123）");
         const entry = updateState((fresh) => {
           const target = fresh.issues[key] || newEntry(key);
           fresh.issues[key] = target;
@@ -205,9 +244,9 @@ async function main() {
           if (opts.status) setStatus(target, opts.status);
           return target;
         });
-        return emit({ command: "state set", entry });
+        return emit({ command: "state repair", entry, repaired: true });
       }
-      return fail("state の後に list / get / set を指定してください");
+      return fail("state の後に list / get / set / repair を指定してください");
     }
 
     case "post": {
@@ -216,17 +255,10 @@ async function main() {
       // 通れば status も進む（承認用コメントが無いまま pr-review にしない）
       if (opts.pending) {
         if (!opts.key) return fail("--key が要ります");
-        const flushed = flushPendingComments(opts.key);
+        // 預けてあった遷移をそのまま適用する。コメントの種類から status を逆算しない
+        const flushed = flushPending(opts.key);
         if (!flushed.ok) return needsHuman("投稿をやり直せない", flushed);
-        const entry = updateState((fresh) => {
-          const target = fresh.issues[opts.key];
-          if (!target) throw new Error(`state に未登録: ${opts.key}`);
-          if (target.status === "implementing" && (target.prs || []).length) {
-            setStatus(target, "pr-review");
-          }
-          return target;
-        });
-        return emit({ command: "post --pending", ...flushed, status: entry.status });
+        return emit({ command: "post --pending", ...flushed });
       }
       const result = post({
         key: opts.key,
@@ -414,11 +446,18 @@ async function main() {
       if (!envelope.ok) return needsHuman("エンベロープが不正", { errors: envelope.errors });
       const action = opts.action || envelope.data.action;
       // bodyFile を読んでよい場所。手で回す場合は作業した worktree を --cwd で渡す
+      // apply も worker と同じ境界を通す。ブランチと base はマネージャが state から
+      // 計算し、ワーカーの申告は照合にしか使わない（apply だけ緩いと迂回できる）
+      const planned = plannedBranch(config, envelope.data.key, action);
       const done = finishEnvelope(envelope.data, {
         action,
         cwd: typeof opts.cwd === "string" ? opts.cwd : null,
         outbox: typeof opts.outbox === "string" ? opts.outbox : null,
         lease: typeof opts.lease === "string" ? opts.lease : null,
+        expectedBranch: planned.branch,
+        base: planned.base,
+        order: planned.order,
+        config,
       });
       if (!done.ok) return needsHuman("エンベロープを反映できない", done);
       return emit({

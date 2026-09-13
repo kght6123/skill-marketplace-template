@@ -39,6 +39,28 @@ function prRecord(state, key, prNumber) {
   return { entry, pr };
 }
 
+// 無効化できない組み込みレビュアー（仕様5章）。設定から外れていても必須にする。
+export const MANDATORY_STEPS = ["memo-check"];
+
+// この変更で回すべき step の id。マネージャが設定から自分で計算する。
+// ワーカーの申告（返ってきた review の中身）から逆算しない。
+export function requiredSteps(config, changedFiles = []) {
+  const ids = (config.review?.steps || [])
+    .filter((step) => matchesWhen(step, changedFiles))
+    .map((step) => step.id);
+  for (const id of MANDATORY_STEPS) {
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return [...new Set(ids)];
+}
+
+// ワーカーが返した review が、必要な step をすべて含んでいるか。
+// 足りなければPRを作らない。security を丸ごと飛ばしてマージまで行けてしまうため。
+export function missingSteps(config, results = [], changedFiles = []) {
+  const got = new Set(results.map((r) => r.reviewer));
+  return requiredSteps(config, changedFiles).filter((id) => !got.has(id));
+}
+
 // command 型を実行し、AI が回すべき step を返す
 export function run(config, { key, pr: prNumber, changedFiles = [] }) {
   prRecord(loadState(), key, prNumber); // 先に存在確認だけする

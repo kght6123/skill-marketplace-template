@@ -22,7 +22,7 @@
       "enteredStatusAt": "2026-09-12T01:00:00.000Z",
       "parkedFrom": null,
       "lease": null,
-      "pendingComments": [],
+      "pendingApply": null,
       "parkedBy": null,
       "sizing": { "estimatedPrs": 3, "examples": 3 },
       "prs": [
@@ -98,11 +98,24 @@
 - 返すのは `orch lease release` か `orch worker --lease <id>`（成否にかかわらず返る）
 - 落ちて残ったものは `orch lease reap` が掃除する（生きているものは消さない）
 
-## 投稿待ち（pendingComments）
+## やり残し（pendingApply）
 
-外に出すコメントは、PRを作る前に本文ごとここへ預ける。全部投稿できてから status を進めるので、
-投稿だけが落ちても「pr-review なのに押すコメントが無い」状態にならない。
+外に出すコメントは、PRを作る前に**本文と「通ったらどの status にするつもりだったか」を一緒に**
+ここへ預ける。全部投稿できてから status を進めるので、投稿だけが落ちても
+「pr-review なのに押すコメントが無い」状態にならない。
+
+```json
+{ "action": "implement-continue", "leaseId": "…", "finalStatus": "implementing",
+  "comments": [{ "kind": "approve", "pr": 50, "body": "…" }] }
+```
+
+`finalStatus` を持つのは、**コメントの種類から status を逆算しないため**。approve コメントでも
+スタックの途中なら `implementing` のまま進む。逆算すると、一時的なAPI障害で
+「続きを作る状態」が失われる。
+
 残っていれば `orch next` が `post-pending` を返し、`orch post --pending` でやり直せる。
+最後の遷移は予約と status を再確認してから行うので、投稿している数秒の間に人間が
+後回しにしていれば、コメントは投稿済みでも status は動かない。
 
 worktree の枠のロックとは別物。あちらは「同じディレクトリに2本入らない」ためで、
 こちらは「同じ Issue を2本が処理しない」ため。worktree の枠だけでは二重実装は防げない。

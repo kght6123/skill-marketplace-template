@@ -70,8 +70,11 @@ export const DEFAULT_CONFIG = {
   review: {
     maxRounds: 2,
     onError: "needs-human",
+    // memo-check は無効化できない組み込みレビュアー（仕様5章）
     steps: [{ id: "memo-check", builtin: "memo-consistency" }],
   },
+  // 1本目のスタックの分岐元。変更ファイルの算出にも使う
+  defaultBranch: "main",
   merge: {
     method: "merge",
     conflict: { humanPaths: ["**/auth/**", "**/migrations/**"], regenerate: {} },
