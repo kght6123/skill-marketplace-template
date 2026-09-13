@@ -1,7 +1,7 @@
 ---
 name: orch-core
 description: AI開発オーケストレーション（orch）の土台。state.json・orch.config.json・スタンプ運用・WIP上限・orch CLI の使い方を提供する。ユーザーが「orchをセットアップして」「AI開発オーケストレーションを導入したい」「state.jsonの状態を見せて」「行列の件数は？」「orchの設定を変えたい」「スタンプの判定ルールを知りたい」などと言ったら使う。他の orch-* スキル（orch-run / orch-issue-memo / orch-implement / orch-review-triage / orch-memo-check）はすべてこのスキルのスクリプトを経由して状態を読み書きする。
-argument-hint: [init|status|config] [--repo org/repo]
+argument-hint: "[init|status|config] [--repo org/repo]"
 ---
 
 # orch-core
