@@ -10,12 +10,14 @@
 //   orch stamps [--human]                   どのリアクションをどの意味に使うか
 //   orch sync [--dry-run] [--rebuild]
 //   orch queue [--human]
-//   orch next [--mode memo|build] [--minutes N] [--project org/repo] [--human]
+//   orch next [--mode memo|build] [--claim] [--minutes N] [--project org/repo] [--human]
+//   orch lease list|release --key org/repo#1 [--id <leaseId>] | orch lease reap
 //   orch state list|get|set ...
 //   orch post --key org/repo#1 --kind memo --body memo.md [--pr 46] [--update]
-//   orch lint memo <file> | orch lint pr <file> [--title "feat(x): ... [1/2] #1"]
+//   orch lint memo|split <file> | orch lint pr <file> [--title "feat(x): ... [1/2] #1"]
 //   orch review run|record|status --key org/repo#1 --pr 46 [...]
-//   orch worker --key org/repo#1 --action implement --prompt task.md [--dry-run]
+//   orch worker --key org/repo#1 --action implement --prompt task.md [--lease ID] [--dry-run]
+//   orch apply --file worker-output.txt [--key K] [--action A] [--cwd worktree] [--outbox dir]
 //   orch apply --file result.json
 //   orch merge-train [--dry-run]
 //   orch conflict --files a.ts,b.ts
@@ -34,10 +36,11 @@ import { queueReport, renderQueue } from "./lib/queue.mjs";
 import { humanQueue, selectWork, HUMAN_KINDS } from "./lib/next.mjs";
 import { sync, rebuild } from "./lib/sync.mjs";
 import { post } from "./lib/post.mjs";
-import { lintMemo, lintPr } from "./lib/lint.mjs";
+import { lintMemo, lintPr, lintSplit } from "./lib/lint.mjs";
 import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
 import { runWorker, parseEnvelope, finishEnvelope } from "./lib/worker.mjs";
+import { claimWork, releaseLease, reapLeases, leaseStatus } from "./lib/lease.mjs";
 import { emojiFor, approveNames, parkNames, redoNames } from "./lib/stamps.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
@@ -48,7 +51,7 @@ if (typeof opts.profile === "string") process.env.ORCH_PROFILE = opts.profile;
 setDryRun(opts["dry-run"]);
 
 // ワーカーに実行させないコマンド（state を書くもの）
-const MANAGER_ONLY = ["sync", "post", "merge-train", "worker", "apply"];
+const MANAGER_ONLY = ["sync", "post", "merge-train", "worker", "apply", "lease"];
 const MANAGER_ONLY_SUB = { state: ["set"], review: ["run", "record", "status"] };
 
 function requireManager() {
@@ -119,7 +122,16 @@ async function main() {
     case "next": {
       const state = loadState();
       if (opts.mode) {
-        const work = selectWork(state, config, opts.mode, opts.limit && Number(opts.limit));
+        const limit = opts.limit && Number(opts.limit);
+        // --claim は「選ぶ」と「予約する」をロックの中で一度にやる。
+        // マネージャを並行させるなら必ずこちらを使う（--claim 無しは下見用）。
+        if (opts.claim) {
+          reapLeases(); // 期限切れ・持ち主が死んだ予約を先に掃除する
+          const claimed = claimWork(config, (fresh) =>
+            selectWork(fresh, config, opts.mode, limit).items);
+          return emit({ command: "next", mode: opts.mode, claimed: true, ...claimed });
+        }
+        const work = selectWork(state, config, opts.mode, limit);
         return emit({ command: "next", mode: opts.mode, ...work });
       }
       const { items, top } = humanQueue(state, config, {
@@ -132,6 +144,22 @@ async function main() {
         { command: "next", top, counts, total: items.length },
         { human, render: renderNext.bind(null, config) },
       );
+    }
+
+    case "lease": {
+      // 論理タスクの予約。worktree のロックとは別物（同じ Issue の二重実行を防ぐ）
+      const sub = positional[1] || "list";
+      if (sub === "list") return emit({ command: "lease list", ...leaseStatus() });
+      if (sub === "reap") return emit({ command: "lease reap", ...reapLeases() });
+      if (sub === "release") {
+        const key = opts.key || positional[2];
+        if (!key) return fail("キーを指定してください（org/repo#123）");
+        return emit({
+          command: "lease release",
+          ...releaseLease(key, typeof opts.id === "string" ? opts.id : null),
+        });
+      }
+      return fail("lease のサブコマンドは list / release / reap");
     }
 
     case "state": {
@@ -178,10 +206,13 @@ async function main() {
       const file = positional[2];
       if (!file || !fs.existsSync(file)) return fail(`ファイルがありません: ${file}`);
       const text = fs.readFileSync(file, "utf8");
+      const LINTERS = { memo: lintMemo, split: lintSplit, pr: lintPr };
+      if (!LINTERS[kind]) return fail(`--kind は memo / split / pr のいずれか（受け取った値: ${kind}）`);
+      const approveEmojis = approveNames(config).map(emojiFor);
       const result =
         kind === "pr"
           ? lintPr(text, { title: opts.title })
-          : lintMemo(text, { approveEmojis: approveNames(config).map(emojiFor) });
+          : LINTERS[kind](text, { approveEmojis });
       const code = emit({ command: `lint ${kind}`, file, ...result }, { human, render: renderLint });
       // lint 違反は「作り直し」であって停止ではないので、専用の終了コード 2 を返す
       return result.ok ? code : EXIT_LINT;
@@ -317,14 +348,21 @@ async function main() {
     case "worker": {
       requireConfigured(config);
       if (!opts.key || !opts.prompt) return fail("--key と --prompt が要ります");
-      const result = runWorker(config, {
-        key: opts.key,
-        action: opts.action || "implement",
-        promptFile: opts.prompt,
-        dryRun: Boolean(opts["dry-run"]),
-      });
+      const lease = typeof opts.lease === "string" ? opts.lease : null;
+      let result;
+      try {
+        result = runWorker(config, {
+          key: opts.key,
+          action: opts.action || "implement",
+          promptFile: opts.prompt,
+          dryRun: Boolean(opts["dry-run"]),
+        });
+      } finally {
+        // 予約は成否にかかわらず返す。返し忘れると、その Issue が誰にも選べなくなる
+        if (lease && !opts["dry-run"]) releaseLease(opts.key, lease);
+      }
       if (result.needs_human) return needsHuman("ワーカーの結果を適用できない", result);
-      return emit({ command: "worker", ...result });
+      return emit({ command: "worker", ...result, leaseReleased: lease });
     }
 
     case "apply": {
@@ -337,7 +375,12 @@ async function main() {
       });
       if (!envelope.ok) return needsHuman("エンベロープが不正", { errors: envelope.errors });
       const action = opts.action || envelope.data.action;
-      const done = finishEnvelope(envelope.data, { action });
+      // bodyFile を読んでよい場所。手で回す場合は作業した worktree を --cwd で渡す
+      const done = finishEnvelope(envelope.data, {
+        action,
+        cwd: typeof opts.cwd === "string" ? opts.cwd : null,
+        outbox: typeof opts.outbox === "string" ? opts.outbox : null,
+      });
       return emit({
         command: "apply",
         ...done.applied,

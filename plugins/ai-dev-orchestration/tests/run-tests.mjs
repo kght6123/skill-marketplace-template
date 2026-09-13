@@ -813,14 +813,17 @@ const prBody = path.join(home, "e2e-pr.md");
 fs.copyFileSync(path.join(fixtures, "pr-ok.md"), prBody);
 const approveBody = path.join(home, "e2e-approve.md");
 fs.writeFileSync(approveBody, "<!-- ai-approve v1 sha=eee555 -->\nレビュー対象\n");
+// 本文は $ORCH_OUTBOX に置く（worktree の外のファイルはマネージャが読まない）
 fs.writeFileSync(e2eCli, [
   "#!/bin/sh",
+  `cp "${prBody}" "$ORCH_OUTBOX/pr-body.md"`,
+  `cp "${approveBody}" "$ORCH_OUTBOX/approve.md"`,
   "cat <<JSON",
   "<<<ORCH_RESULT>>>",
   '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
   `  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",`,
-  `                   "head": "e2e/125", "bodyFile": "${prBody}" },`,
-  `  "comments": [{ "kind": "approve", "bodyFile": "${approveBody}" }] }`,
+  `                   "head": "e2e/125", "bodyFile": "$ORCH_OUTBOX/pr-body.md" },`,
+  `  "comments": [{ "kind": "approve", "bodyFile": "$ORCH_OUTBOX/approve.md" }] }`,
   "<<<END>>>",
   "JSON",
 ].join("\n"));
@@ -886,11 +889,12 @@ fs.writeFileSync(badPr, "見出しの無い本文\n");
 const badCli = path.join(home, "e2e-bad.sh");
 fs.writeFileSync(badCli, [
   "#!/bin/sh",
+  `cp "${badPr}" "$ORCH_OUTBOX/pr-body.md"`,
   "cat <<JSON",
   "<<<ORCH_RESULT>>>",
   '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
   `  "pullRequest": { "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",`,
-  `                   "head": "bad/125", "bodyFile": "${badPr}" } }`,
+  `                   "head": "bad/125", "bodyFile": "$ORCH_OUTBOX/pr-body.md" } }`,
   "<<<END>>>",
   "JSON",
 ].join("\n"));
@@ -901,6 +905,203 @@ const badPrRun = run(["worker", "--key", "org/order-api#125", "--action", "imple
 check("PR本文が lint を通らなければ作らない", /lint/.test(badPrRun), true);
 check("PRを作らなければ state にも入らない",
   json(["state", "get", "org/order-api#125"]).entry.prs.length, 0);
+
+
+// --- 分割案は lint split で通る（lint memo では必ず落ちる）----------------
+resetState();
+check("正しい分割案は lint split を通る",
+  json(["lint", "split", path.join(fixtures, "split-ok.md")]).ok, true);
+check("分割案に lint memo をかけると落ちる（マーカーと見出しが別物）",
+  json(["lint", "memo", path.join(fixtures, "split-ok.md")], { expectExit: 2 })
+    .findings.filter((f) => f.severity === "block").map((f) => f.rule).sort(),
+  ["heading", "marker"]);
+check("理解メモに lint split をかけても落ちる",
+  json(["lint", "split", path.join(fixtures, "memo-ok.md")], { expectExit: 2 }).ok, false);
+check("上限違反の分割案は block になる",
+  json(["lint", "split", path.join(fixtures, "split-ng.md")], { expectExit: 2 })
+    .findings.filter((f) => f.severity === "block").map((f) => f.rule).sort(),
+  ["children", "footer", "questions", "why"]);
+check("知らない kind は lint できない",
+  /kind/.test(run(["lint", "memo2", path.join(fixtures, "memo-ok.md")], { expectExit: 1 })), true);
+
+// --- 止まっている Issue の PR はマージしない ------------------------------
+// GitHub 側の条件が揃っても、state が pr-review でなければ止める。
+const mergeReady = {
+  state: "OPEN", headRefOid: "abc123", reviewDecision: "APPROVED", mergeable: "MERGEABLE",
+  statusCheckRollup: [{ name: "ci", status: "COMPLETED", conclusion: "SUCCESS" }],
+  latestReviews: [{ state: "APPROVED", commit: { oid: "abc123" } }],
+};
+const noThreads = { data: { repository: { pullRequest: { reviewThreads: {
+  nodes: [], pageInfo: { hasNextPage: false, endCursor: null },
+} } } } };
+function mergeWith(status) {
+  resetState();
+  run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+    status,
+    prs: [{ number: 46, order: 1, headSha: "abc123", merged: false,
+            selfApproved: true, approvedSha: "abc123" }],
+  })]);
+  return json(["merge-train", "--dry-run"], { env: withGh({ prView: mergeReady, graphql: noThreads }) });
+}
+check("needs-human の Issue はマージしない", mergeWith("needs-human").results[0].merged, false);
+check("理由に status を挙げる",
+  mergeWith("needs-human").results[0].reasons.some((r) => r.includes("needs-human")), true);
+check("parked の Issue はマージしない", mergeWith("parked").results[0].merged, false);
+check("implementing の Issue はマージしない", mergeWith("implementing").results[0].merged, false);
+check("pr-review ならマージ対象になる", mergeWith("pr-review").results[0].wouldMerge, true);
+
+// PR が閉じられていればマージしない
+resetState();
+run(["state", "set", "org/order-api#123", "--set", JSON.stringify({
+  status: "pr-review",
+  prs: [{ number: 46, order: 1, headSha: "abc123", merged: false,
+          selfApproved: true, approvedSha: "abc123" }],
+})]);
+const closedPr = json(["merge-train", "--dry-run"], { env: withGh({
+  prView: { ...mergeReady, state: "CLOSED" }, graphql: noThreads,
+}) });
+check("CLOSED の PR はマージしない", closedPr.results[0].merged, false);
+check("理由に PR の状態を挙げる",
+  closedPr.results[0].reasons.some((r) => r.includes("CLOSED")), true);
+
+// --- ワーカーは許可された場所のファイルしか本文にできない ------------------
+// bodyFile はワーカーが決める文字列なので、そのまま読むと任意のファイルを投稿できる。
+const outsideFile = path.join(home, "outside-secret.md");
+fs.writeFileSync(outsideFile, "秘密\n");
+const escapeCli = workerCli("w-escape",
+  '{ "key": "org/order-api#125", "action": "implement", "status": "pr-review",\n' +
+  '  "prs": [{ "number": 62, "headSha": "ccc" }],\n' +
+  `  "comments": [{ "kind": "approve", "pr": 62, "bodyFile": "${outsideFile}" }] }`);
+resetState(withWorker(escapeCli, { branchPrefix: "escape/", worktreeRoot: path.join(home, "wt-escape") }));
+const escaped = run(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { expectExit: 1, env: withGh({ postedComment: { id: 4321 } }) });
+check("worktree の外のファイルは本文にできない", /許可された場所の外/.test(escaped), true);
+
+// worktree の中のファイルなら通る。本文は heredoc の外で書き、パスは shell に展開させる。
+function bodyWorkerCli(name, { writeTo, prNumber, pathExpr }) {
+  const file = path.join(home, `${name}.sh`);
+  fs.writeFileSync(file, [
+    "#!/bin/sh",
+    `printf '%s\\n%s\\n' "<!-- ai-approve v1 -->" "レビュー対象" > ${writeTo}`,
+    "cat <<JSON",
+    "<<<ORCH_RESULT>>>",
+    '{ "key": "$ORCH_KEY", "action": "$ORCH_ACTION", "status": "pr-review",',
+    `  "prs": [{ "number": ${prNumber}, "headSha": "ddd" }],`,
+    `  "comments": [{ "kind": "approve", "pr": ${prNumber}, "bodyFile": "${pathExpr}" }] }`,
+    "<<<END>>>",
+    "JSON",
+  ].join("\n"));
+  fs.chmodSync(file, 0o755);
+  return file;
+}
+
+const insideCli = bodyWorkerCli("w-inside", {
+  writeTo: "./approve.md", prNumber: 63, pathExpr: "$(pwd)/approve.md",
+});
+resetState(withWorker(insideCli, { branchPrefix: "inside/", worktreeRoot: path.join(home, "wt-inside") }));
+const inside = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { env: withGh({ postedComment: { id: 4322 } }) });
+check("worktree の中のファイルは本文にできる", inside.posted[0].commentId, 4322);
+
+// $ORCH_OUTBOX に置いたファイルも本文にできる（1回の起動ごとに渡される受け渡し用ディレクトリ）
+const outboxCli = bodyWorkerCli("w-outbox", {
+  writeTo: '"$ORCH_OUTBOX/approve.md"', prNumber: 65, pathExpr: "$ORCH_OUTBOX/approve.md",
+});
+resetState(withWorker(outboxCli, { branchPrefix: "outbox/", worktreeRoot: path.join(home, "wt-outbox") }));
+const viaOutbox = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { env: withGh({ postedComment: { id: 4323 } }) });
+check("$ORCH_OUTBOX のファイルは本文にできる", viaOutbox.posted[0].commentId, 4323);
+
+// --- 依頼と違う action のエンベロープは拒否する --------------------------
+resetState(withWorker(workerCli("w-action",
+  '{ "key": "org/order-api#125", "action": "apply-triage", "status": "pr-review" }'),
+  { branchPrefix: "action/", worktreeRoot: path.join(home, "wt-action") }));
+const wrongAction = json(["worker", "--key", "org/order-api#125", "--action", "implement", "--prompt", promptFile],
+  { expectExit: 3 });
+check("依頼と違う action は拒否する",
+  wrongAction.errors.some((e) => e.includes("action が違う")), true);
+
+// --- 予約（lease）: 同じ件を2つのマネージャが取らない --------------------
+resetState({ wip: { selfReview: 3, memoReview: 3, splitReview: 2 } });
+run(["state", "set", "org/order-api#125", "--set", '{"blockedBy":[]}']);
+const firstClaim = json(["next", "--mode", "build", "--claim"]);
+check("--claim は予約を返す", firstClaim.items.length, 1);
+check("leaseId が付く", typeof firstClaim.items[0].leaseId, "string");
+check("予約済みの件は次の claim では返らない",
+  json(["next", "--mode", "build", "--claim"]).items, []);
+check("--claim なしの下見でも予約済みは返らない",
+  json(["next", "--mode", "build"]).items, []);
+check("lease list に出る", json(["lease", "list"]).leases.map((l) => l.key), ["org/order-api#125"]);
+
+// 返せばまた取れる
+json(["lease", "release", "--key", "org/order-api#125", "--id", firstClaim.items[0].leaseId]);
+check("返した予約は消える", json(["lease", "list"]).leases.length, 0);
+check("返せばまた選べる",
+  json(["next", "--mode", "build", "--claim"]).items.map((i) => i.key), ["org/order-api#125"]);
+
+// 他人の id では返せない
+const mine = json(["lease", "list"]).leases[0];
+check("別の id では予約を返せない",
+  json(["lease", "release", "--key", "org/order-api#125", "--id", "not-my-id"]).released, false);
+check("正しい id なら返せる",
+  json(["lease", "release", "--key", "org/order-api#125", "--id", mine.id]).released, true);
+
+// 死んだ持ち主の予約は reap で掃除される
+run(["state", "set", "org/order-api#125", "--set", JSON.stringify({
+  lease: { id: "stale", action: "implement", pid: 2147483646, hostname: os.hostname(),
+           startedAt: "2000-01-01T00:00:00Z", expiresAt: "2000-01-01T00:00:00Z" },
+})]);
+check("持ち主が死んだ予約は掃除される", json(["lease", "reap"]).reaped.map((r) => r.key),
+  ["org/order-api#125"]);
+
+// 生きている持ち主の予約は掃除しない
+run(["state", "set", "org/order-api#125", "--set", JSON.stringify({
+  lease: { id: "live", action: "implement", pid: process.pid, hostname: os.hostname(),
+           startedAt: "2000-01-01T00:00:00Z", expiresAt: "2000-01-01T00:00:00Z" },
+})]);
+check("持ち主が生きている予約は期限切れでも掃除しない", json(["lease", "reap"]).reaped, []);
+json(["lease", "release", "--key", "org/order-api#125"]);
+
+// --- 残り1枠を2つのマネージャが同時に取らない ---------------------------
+// 予約を取らずに選ぶと、両方が「空きがある」と判断して WIP を超える。
+resetState({ wip: { memoReview: 1, splitReview: 2, selfReview: 3 } });
+run(["state", "set", "org/order-api#124", "--status", "done"]); // 行列を空けて残り1枠にする
+for (const key of ["org/admin-web#46", "org/admin-web#47"]) {
+  run(["state", "set", key, "--status", "sizing",
+    "--set", '{"sizing":{"estimatedPrs":2,"examples":2},"blockedBy":[]}']);
+}
+const races = await Promise.all([0, 0].map(() =>
+  new Promise((resolve) => {
+    const proc = spawn("node", [orch, "next", "--mode", "memo", "--claim"], {
+      stdio: ["ignore", "pipe", "ignore"],
+      env: { ...process.env, ORCH_HOME: home },
+    });
+    let out = "";
+    proc.stdout.on("data", (d) => (out += d));
+    proc.on("close", () => resolve(JSON.parse(out)));
+  })));
+const claimedKeys = races.flatMap((r) => r.items.map((i) => i.key));
+check("同時に claim しても残り1枠は1件しか出ない", claimedKeys.length, 1);
+check("同じ件を2つのマネージャが取らない", new Set(claimedKeys).size, claimedKeys.length);
+
+// --- worker --lease は成否にかかわらず予約を返す -------------------------
+resetState(withWorker(workerCli("w-lease",
+  '{ "key": "org/order-api#125", "action": "implement", "status": "pr-review",\n' +
+  '  "prs": [{ "number": 64, "headSha": "eee" }] }'),
+  { branchPrefix: "lease/", worktreeRoot: path.join(home, "wt-lease") }));
+run(["state", "set", "org/order-api#125", "--set", '{"blockedBy":[]}']);
+const leased = json(["next", "--mode", "build", "--claim"]).items[0];
+json(["worker", "--key", "org/order-api#125", "--action", "implement",
+  "--prompt", promptFile, "--lease", leased.leaseId]);
+check("ワーカーが終われば予約は返る", json(["lease", "list"]).leases.length, 0);
+
+// 失敗しても返る
+resetState(withWorker(dyingCli, { branchPrefix: "leasefail/", worktreeRoot: path.join(home, "wt-leasefail") }));
+run(["state", "set", "org/order-api#125", "--set", '{"blockedBy":[]}']);
+const leased2 = json(["next", "--mode", "build", "--claim"]).items[0];
+run(["worker", "--key", "org/order-api#125", "--action", "implement",
+  "--prompt", promptFile, "--lease", leased2.leaseId], { expectExit: 3 });
+check("ワーカーが失敗しても予約は返る", json(["lease", "list"]).leases.length, 0);
 
 fs.rmSync(home, { recursive: true, force: true });
 console.log(failed ? `\n${failed} 件が失敗` : "\nすべて成功");

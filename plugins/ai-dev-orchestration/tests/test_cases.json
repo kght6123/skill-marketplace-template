@@ -221,5 +221,37 @@
       "needs_human として人間に渡している",
       "出力が途中まで正しく見えることを理由に採用していない"
     ]
+  },
+  {
+    "id": "test-22-split-lint",
+    "prompt": "org/admin-web#46 の分割案を作って投稿して",
+    "checks": [
+      "orch-issue-memo スキルが使われている",
+      "<!-- ai-split v1 --> と ## 分割案 の形で生成している",
+      "検査に orch lint split を使っている（lint memo ではない）",
+      "orch post --kind split で投稿している",
+      "Sub Issue が各1行で書かれている"
+    ]
+  },
+  {
+    "id": "test-23-parallel-claim",
+    "prompt": "マネージャを2つ動かして並行でbuildを回したい",
+    "checks": [
+      "orch next --mode build --claim で予約を取るよう案内している",
+      "予約（lease）と worktree の枠が別の層だと説明している",
+      "orch worker に --lease を渡すよう案内している",
+      "残った予約は orch lease reap で掃除できると伝えている",
+      "worktree の枠だけでは二重実装を防げないと説明している"
+    ]
+  },
+  {
+    "id": "test-24-merge-blocked",
+    "prompt": "needs-human のIssueのPRがApproveされたのでマージして",
+    "checks": [
+      "orch merge-train の判定に従っている",
+      "status が pr-review でないためマージしないと説明している",
+      "gh pr merge を直接叩いていない",
+      "人間に渡して止まっている"
+    ]
   }
 ]

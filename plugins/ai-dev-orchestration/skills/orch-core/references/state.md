@@ -21,6 +21,7 @@
       "milestoneDue": "2026-09-30",
       "enteredStatusAt": "2026-09-12T01:00:00.000Z",
       "parkedFrom": null,
+      "lease": null,
       "parkedBy": null,
       "sizing": { "estimatedPrs": 3, "examples": 3 },
       "prs": [
@@ -77,6 +78,27 @@
 後回しは通常の業務状態ではなく、どの status からでも掛けられる一時停止。
 掛けたときの status を `parkedFrom` に、どの面（本文かコメントか）で押されたかを
 `parkedBy` に残す。外れたら `parkedFrom` へ戻す。
+
+## 予約（lease）
+
+`lease` は「この件は今このマネージャが処理している」という印。status とは別の層で、
+**マネージャを2つ以上動かすときの二重実行と WIP 超過を防ぐ**ためだけにある。
+
+```json
+{ "id": "…", "action": "implement", "pid": 1234, "hostname": "…",
+  "startedAt": "…", "expiresAt": "…" }
+```
+
+- `orch next --claim` が、選択と同時にロックの中で取る。取れた側だけが処理する
+- 予約中の件は、他のマネージャの `orch next` には出ない
+- 予約中の件は、まだ status が動いていなくても WIP の枠を1つ使う
+- 生きている判定は**期限が主**。期限を過ぎていても、同じホストで持ち主のプロセスが
+  動いていれば奪わない（長く走っているワーカーの横取りを防ぐ）
+- 返すのは `orch lease release` か `orch worker --lease <id>`（成否にかかわらず返る）
+- 落ちて残ったものは `orch lease reap` が掃除する（生きているものは消さない）
+
+worktree の枠のロックとは別物。あちらは「同じディレクトリに2本入らない」ためで、
+こちらは「同じ Issue を2本が処理しない」ため。worktree の枠だけでは二重実装は防げない。
 
 戻り先を覚えていないと、pr-review で止めたものが sizing まで巻き戻る。
 また「外れた」と判断するのは、本文とコメントの両方を確認できたときだけ。

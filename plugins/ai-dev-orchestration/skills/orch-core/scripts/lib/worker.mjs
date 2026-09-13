@@ -228,6 +228,11 @@ export function parseEnvelope(text, { key, action } = {}) {
   }
   if (typeof data.key !== "string") errors.push("key が無い");
   if (key && data.key !== key) errors.push(`key が違う（依頼: ${key} / 返答: ${data.key}）`);
+  // action も依頼と一致していること。ずれていると、許可される status も
+  // triageApplied の扱いも別の action のものになる
+  if (action && data.action && data.action !== action) {
+    errors.push(`action が違う（依頼: ${action} / 返答: ${data.action}）`);
+  }
 
   // status は action ごとの許可リストに載っているものだけ
   if (data.status) {
@@ -361,6 +366,10 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
   const { dir, branch, slot } = ensureWorktree(config, key, { lock: true });
   const { command, argv } = buildCommand(worker, prompt);
 
+  // ワーカーが本文（PR本文・コメント）を置く場所。1回の起動ごとに作る。
+  // ここと worktree の中以外のファイルは、マネージャが本文として読まない。
+  const outbox = fs.mkdtempSync(path.join(os.tmpdir(), `orch-outbox-${process.pid}-`));
+
   let res;
   try {
     res = spawnSync(command, argv, {
@@ -377,6 +386,7 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
         ORCH_KEY: key,
         ORCH_ACTION: action,
         ORCH_BRANCH: branch,
+        ORCH_OUTBOX: outbox,
       },
     });
   } finally {
@@ -386,7 +396,10 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
 
   // 終了コードが 0 でなければ、エンベロープが揃っていても採用しない。
   // 出力の後で後処理やフックが落ちた可能性があり、部分的な stdout は信用できない。
+  const cleanOutbox = () => fs.rmSync(outbox, { recursive: true, force: true });
+
   if (res.status !== 0) {
+    cleanOutbox();
     return {
       ok: false, key, action, cwd: dir, slot, exitCode: res.status,
       errors: [`ワーカーが終了コード ${res.status} で終了した`],
@@ -398,6 +411,7 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
   // ワーカーは信用しない実行主体。key・status・書ける項目をすべて突き合わせる。
   const envelope = parseEnvelope(res.stdout || "", { key, action });
   if (!envelope.ok) {
+    cleanOutbox();
     return {
       ok: false,
       key,
@@ -410,29 +424,60 @@ export function runWorker(config, { key, action, promptFile, dryRun = false }) {
       stderr: (res.stderr || "").slice(-2000),
     };
   }
-  return finishEnvelope(envelope.data, {
-    action,
-    extra: { key, action, cwd: dir, branch, slot, exitCode: res.status },
-  });
+  try {
+    return finishEnvelope(envelope.data, {
+      action,
+      cwd: dir,
+      outbox,
+      extra: { key, action, cwd: dir, branch, slot, exitCode: res.status },
+    });
+  } finally {
+    cleanOutbox();
+  }
 }
 
 // エンベロープを state・GitHub に反映する。マネージャ側だけが呼ぶ。
 //   1. PR を作る（lint を通してから）
 //   2. state に反映する
 //   3. コメントを投稿する（新しいPR宛ては番号を差し替える）
-export function finishEnvelope(data, { action, extra = {} } = {}) {
-  const created = createPullRequest(data);
+export function finishEnvelope(data, { action, cwd = null, outbox = null, extra = {} } = {}) {
+  // ワーカーが bodyFile で指せる範囲は、作業した worktree と、
+  // マネージャがそのワーカーのために作った受け渡し用ディレクトリ（outbox）だけ。
+  // os.tmpdir() 全体を許すと、他プロセスが置いたファイルまで投稿できてしまう。
+  const allowedDirs = [cwd, outbox].filter(Boolean);
+  const created = createPullRequest(data, { allowedDirs });
   const withPr = created
     ? { ...data, prs: [...(data.prs || []), { number: created.number, branch: data.pullRequest.head }] }
     : data;
   const applied = applyEnvelope(withPr, { action });
-  const posted = postEnvelopeComments(data, { newPrNumber: created?.number ?? null });
+  const posted = postEnvelopeComments(data, { newPrNumber: created?.number ?? null, allowedDirs });
   return { ok: true, ...extra, createdPr: created, applied, posted, envelope: data };
 }
 
+// ワーカーが指し示してよいファイルの範囲。
+//
+// bodyFile はワーカーが決めた文字列なので、そのまま読むと
+// /etc/passwd のようなファイルを GitHub のコメントとして投稿させられる。
+// 読んでよいのは「ワーカーが作業した worktree の中」と「一時ディレクトリの中」だけ。
+function assertInsideAllowed(file, allowedDirs, what) {
+  const resolved = path.resolve(file);
+  const ok = allowedDirs
+    .filter(Boolean)
+    .map((d) => path.resolve(d))
+    .some((dir) => resolved === dir || resolved.startsWith(dir + path.sep));
+  if (!ok) {
+    throw new Error(
+      `${what} のファイルが許可された場所の外にあります: ${resolved}（許可: ${allowedDirs.filter(Boolean).join(" / ")}）`,
+    );
+  }
+  return resolved;
+}
+
 // 本文をファイルに落とす（インラインで来た場合）
-function bodyToFile(entryBody, entryFile, tag) {
-  if (entryFile) return { file: entryFile, temp: null };
+function bodyToFile(entryBody, entryFile, tag, allowedDirs) {
+  if (entryFile) {
+    return { file: assertInsideAllowed(entryFile, allowedDirs, tag), temp: null };
+  }
   const temp = path.join(os.tmpdir(), `orch-${tag}-${process.pid}-${Date.now()}.md`);
   fs.writeFileSync(temp, entryBody);
   return { file: temp, temp };
@@ -440,11 +485,11 @@ function bodyToFile(entryBody, entryFile, tag) {
 
 // PR はマネージャが作る。作る前に PR本文の lint を通す。
 // ワーカー側で作らせると、テンプレートの上限をすり抜けられる。
-export function createPullRequest(data) {
+export function createPullRequest(data, { allowedDirs = [] } = {}) {
   const want = data.pullRequest;
   if (!want) return null;
   const { nameWithOwner } = parseKey(data.key);
-  const { file, temp } = bodyToFile(want.body, want.bodyFile, "pr-body");
+  const { file, temp } = bodyToFile(want.body, want.bodyFile, "pr-body", allowedDirs);
   try {
     const checked = lintPr(fs.readFileSync(file, "utf8"), { title: want.title });
     if (!checked.ok) {
@@ -472,10 +517,10 @@ export function createPullRequest(data) {
 }
 
 // エンベロープの comments を投稿し、commentId を state に記録する
-export function postEnvelopeComments(data, { newPrNumber = null } = {}) {
+export function postEnvelopeComments(data, { newPrNumber = null, allowedDirs = [] } = {}) {
   const posted = [];
   for (const c of data.comments || []) {
-    const { file, temp } = bodyToFile(c.body, c.bodyFile, "comment");
+    const { file, temp } = bodyToFile(c.body, c.bodyFile, "comment", allowedDirs);
     const prNumber = typeof c.pr === "number" ? c.pr : newPrNumber;
     try {
       const result = post({ key: data.key, kind: c.kind, bodyFile: file, pr: prNumber });

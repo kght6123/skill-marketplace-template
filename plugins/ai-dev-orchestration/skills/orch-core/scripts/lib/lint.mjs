@@ -117,6 +117,57 @@ export function lintMemo(text, limits = {}) {
   return summarize(f, { checkboxes, diagrams: diagrams.length });
 }
 
+// 分割案の検査。理解メモとは別物なので lintMemo は使えない
+// （マーカーも見出しも違い、例の表もスケルトンも図も要らない）。
+// 分割案で守らせたいのは「1行1 Sub Issue」「依存が表で解決できる」の2点だけ。
+export function lintSplit(text, limits = {}) {
+  const max = { why: 3, questions: 3, ...limits };
+  const approve = limits.approveEmojis?.length ? limits.approveEmojis : ["🚀"];
+  const f = [];
+
+  if (!/<!--\s*ai-split\s+v\d+\s*-->/.test(text)) {
+    f.push(finding("block", "marker", "先頭に <!-- ai-split v1 --> が無い（state 再構築の目印）"));
+  }
+  if (!/^##\s*分割案/m.test(text)) {
+    f.push(finding("block", "heading", "「## 分割案」の見出しが無い"));
+  }
+
+  const yaru = /\*\*やること\*\*:\s*(.*)/.exec(text);
+  if (!yaru) {
+    f.push(finding("block", "yaru", "**やること** が無い"));
+  } else if (yaru[1].trim().length === 0) {
+    f.push(finding("block", "yaru", "**やること** が空", lineOf(text, yaru[0])));
+  }
+
+  const quoted = text.split("\n").filter((l) => /^\s*>/.test(l)).length;
+  if (quoted !== max.why) {
+    f.push(finding("block", "why", `「なぜ・現状・範囲」は${max.why}行固定（現在 ${quoted} 行）`));
+  }
+
+  // Sub Issue の表。件数に上限は無いが、1件も無ければ分割案になっていない
+  const tableIdx = text.search(/\n\|/);
+  const rows = tableIdx >= 0 ? tableRows(text, tableIdx + 1) : 0;
+  if (rows < 1) {
+    f.push(finding("block", "children", "Sub Issue の表が無い（1件以上）"));
+  }
+  // 各行は1行で書く。依存は # 列の番号で書くので、表の外に依存を書かせない
+  const multiline = text.split("\n").filter((l) => /^\s*\|/.test(l) && /<br\s*\/?>/.test(l)).length;
+  if (multiline) {
+    f.push(finding("block", "children", `Sub Issue は各1行（改行を含む行が ${multiline} 行）`));
+  }
+
+  const checkboxes = (text.match(/^\s*[-*]\s*\[[ x]\]/gm) || []).length;
+  if (checkboxes > max.questions) {
+    f.push(finding("block", "questions", `確認事項は最大${max.questions}つ（現在 ${checkboxes} つ）`));
+  }
+
+  if (!approve.some((e) => text.includes(e))) {
+    f.push(finding("block", "footer", `フッタのスタンプ案内（${approve.join("")} 分割OK ／ 後回し）が無い`));
+  }
+
+  return summarize(f, { children: rows, checkboxes });
+}
+
 export function lintPr(text, { title } = {}) {
   const f = [];
   const lines = text.split("\n");

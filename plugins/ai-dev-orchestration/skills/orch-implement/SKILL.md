@@ -25,7 +25,11 @@ worktree を作らない・state.json を書かない・コメントを投稿し
 | コメント投稿 | `comments` で頼む | `orch post` で投稿する |
 | state.json | 触らない | `orch apply` で反映する |
 
-渡される環境変数は `ORCH_ROLE` / `ORCH_KEY`（対象キー）/ `ORCH_ACTION`（モード）/ `ORCH_BRANCH`（作業ブランチ）。
+渡される環境変数は `ORCH_ROLE` / `ORCH_KEY`（対象キー）/ `ORCH_ACTION`（モード）/ `ORCH_BRANCH`（作業ブランチ）/
+`ORCH_OUTBOX`（本文の受け渡し用ディレクトリ）。
+
+**本文のファイルは `$ORCH_OUTBOX` か worktree の中に置く。** それ以外の場所を `bodyFile` に書くと
+マネージャが読まずに止まる（ワーカーが任意のファイルを投稿できると危ないため）。
 
 スクリプトの場所と実行の鉄則は `orch-core/SKILL.md`、役割の境界は `orch-core/references/topology.md`。
 
@@ -93,7 +97,7 @@ git push -u origin "$ORCH_BRANCH"
 本文は `references/pr-template.md` の形でファイルに書き、手元で lint を通しておく。
 
 ```bash
-node "$ORCH" lint pr /tmp/pr-body.md --title "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123"
+node "$ORCH" lint pr "$ORCH_OUTBOX/pr-body.md" --title "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123"
 ```
 
 exit 2 なら作り直す。通ったらエンベロープの `pullRequest` に載せて返す。
@@ -103,7 +107,7 @@ exit 2 なら作り直す。通ったらエンベロープの `pullRequest` に�
   "title": "feat(order-api): 期間指定でCSVを絞り込む [2/3] #123",
   "head": "orch/125",
   "base": "orch/124",
-  "bodyFile": "/abs/path/pr-body.md",
+  "bodyFile": "$ORCH_OUTBOX/pr-body.md",
   "draft": false
 }
 ```
@@ -123,7 +127,7 @@ exit 2 なら作り直す。通ったらエンベロープの `pullRequest` に�
 <sub>🚀👍❤️ レビュー依頼へ ／ 👎 修正依頼（行コメントに理由）／ 😄 後回し</sub>
 ```
 
-ワーカーは投稿できないので、本文をファイルに書いてエンベロープの `comments` に載せる。
+ワーカーは投稿できないので、本文を `$ORCH_OUTBOX` に書いてエンベロープの `comments` に載せる。
 投稿はマネージャが `orch post --kind approve` で行う。
 
 🚀の意味は「セルフレビューOK、他のエンジニアにレビュー依頼」。マージ条件は他エンジニアのApprove。
@@ -146,10 +150,10 @@ exit 2 なら作り直す。通ったらエンベロープの `pullRequest` に�
   "pullRequest": {
     "title": "feat(order-api): 期間指定でCSVを絞り込む [1/3] #125",
     "head": "orch/125",
-    "bodyFile": "/abs/path/pr-body.md"
+    "bodyFile": "<$ORCH_OUTBOX>/pr-body.md"
   },
   "review": [{ "reviewer": "memo-check", "findings": [] }],
-  "comments": [{ "kind": "approve", "bodyFile": "/abs/path/approve.md" }],
+  "comments": [{ "kind": "approve", "bodyFile": "<$ORCH_OUTBOX>/approve.md" }],
   "needs_human": false,
   "notes": "テストを3件追加。エラーは400で返した"
 }

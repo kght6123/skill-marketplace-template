@@ -40,6 +40,7 @@ Claude Code 固有の機能は使わない。ワーカーのCLIは差し替え�
 6. **ワーカーは state を書かない**。`ORCH_ROLE=worker` のセッションでは `orch` が書き込み系を拒否する。結果はエンベロープで返す
 7. **ワーカーは外に何も作らない**。worktree作成・PR作成（`gh pr create`）・コメント投稿はすべてマネージャ。ワーカーは頼むだけ
 8. **ワーカーの終了コードが 0 でなければ、エンベロープがあっても採用しない**。出力の後で落ちた可能性があるため
+9. **マネージャを並行させるなら `orch next --claim`**。予約を取らずに選ぶと、同じ Issue を2本が処理して WIP も超える
 
 ---
 
@@ -72,18 +73,19 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 |---|---|
 | `orch sync` | 何かを始める前。GitHubの差分とスタンプを読んで状態を進める |
 | `orch queue` | コメントを投稿する前。行列が満杯なら投稿しない |
-| `orch next --mode memo\|build` | AIが次に処理する1件を決める |
+| `orch next --mode memo\|build [--claim]` | AIが次に処理する1件を決める。`--claim` で予約まで取る |
 | `orch next [--minutes N]` | 人間向けの「今やること」1件 |
 | `orch state list\|get\|set` | 状態の読み書き |
 | `orch post --kind memo\|split\|approve\|triage` | コメント投稿（commentIdの記録と状態遷移まで） |
-| `orch lint memo\|pr <file>` | 生成物の上限検査。exit 2 なら作り直し |
+| `orch lint memo\|split\|pr <file>` | 生成物の上限検査。種類ごとに別の検査。exit 2 なら作り直し |
 | `orch review run\|record\|status` | AIレビューのpipeline |
 | `orch merge-train` | マージ条件の判定とマージ |
 | `orch profile` | 今のプロファイル（モデルの組み合わせ）とマネージャの起動コマンド |
 | `orch phase` | 今の段。実装とマージが有効かどうか |
 | `orch stamps` | スタンプの割り当てと、フッタに書く文面 |
 | `orch worker --key K --action A --prompt f` | 各リポジトリの worktree でワーカーを起動する |
-| `orch apply --file f` | ワーカーの結果エンベロープを反映する（PR作成 → state → コメント投稿） |
+| `orch apply --file f [--cwd d]` | ワーカーの結果エンベロープを反映する（PR作成 → state → コメント投稿） |
+| `orch lease list\|release\|reap` | 論理タスクの予約。二重実行と WIP 超過を防ぐ |
 | `orch conflict --files a,b` | 競合を自動解決とhuman確認に分類 |
 
 詳しい引数は `node "$ORCH"` を引数なしで実行すると出る。

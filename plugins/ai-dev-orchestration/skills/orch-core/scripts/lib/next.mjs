@@ -2,6 +2,7 @@
 // AI はここが返した1件だけを処理する。順番を自分で決め直さない。
 import { blockingCount, listEntries } from "./state.mjs";
 import { queueReport } from "./queue.mjs";
+import { leaseIsLive } from "./lease.mjs";
 
 // 人間向けの並び順（他人を待たせているもの → 完了に近いもの）
 export const HUMAN_KINDS = [
@@ -134,6 +135,8 @@ export function selectWork(state, config, mode, limit) {
 
   const candidates = [];
   for (const entry of Object.values(state.issues)) {
+    // 他のマネージャが予約済みなら選ばない（二重実行の防止）
+    if (leaseIsLive(entry.lease)) continue;
     const action = workAction(entry, config);
     if (!action || !allowed.includes(action)) continue;
 
@@ -157,6 +160,13 @@ export function selectWork(state, config, mode, limit) {
   const room = Object.fromEntries(
     Object.entries(report.queues).map(([name, q]) => [name, q.room]),
   );
+  // 予約済みの件はまだ status が動いていないので queueReport には出ない。
+  // 先に枠を引いておかないと、残り1枠を2つのマネージャが別々に使える。
+  for (const entry of Object.values(state.issues)) {
+    if (!leaseIsLive(entry.lease)) continue;
+    const queue = CONSUMES[entry.lease.action];
+    if (queue) room[queue] -= 1;
+  }
   const items = [];
   for (const { key, action } of candidates) {
     if (items.length >= max) break;

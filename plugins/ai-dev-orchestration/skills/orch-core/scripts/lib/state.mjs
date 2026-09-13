@@ -145,6 +145,7 @@ export function newEntry(key, overrides = {}) {
     prs: [],
     title: null,
     milestoneDue: null,
+    lease: null, // 論理タスクの予約（lease.mjs）。二重実行の防止に使う
     enteredStatusAt: new Date().toISOString(),
     ...overrides,
   };

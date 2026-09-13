@@ -54,7 +54,8 @@ node "$ORCH" state set <key> --set '{"sizing":{"estimatedPrs":3,"examples":4}}'
 `memo-redo` のときは、押されたスタンプ（`state get` の `redo`）が示す方向に直す。
 👎＝理解がズレ、😕＝例が違う、👀＝長い（読むのが大変）。
 
-**split / split-redo** — `references/split-template.md` の形で書く。
+**split / split-redo** — `references/split-template.md` の形で書く。検査は `lint split`。
+`lint memo` は通らない（マーカーも見出しも違うので、正しく書いても必ず block になる）。
 
 **create-children** — 分割案の表を解析して Sub Issue を作る。
 
@@ -66,8 +67,11 @@ node "$ORCH" state set <key> --set '{"childrenCreated":true}'
 
 ### 4. lint を通す
 
+action ごとに linter が違う。`sizing` と `create-children` は本文が無いので lint しない。
+
 ```bash
-node "$ORCH" lint memo /tmp/memo.md
+node "$ORCH" lint memo  /tmp/memo.md    # memo / memo-update / memo-redo
+node "$ORCH" lint split /tmp/split.md   # split / split-redo
 ```
 
 exit 2 なら **作り直し**。同じ内容を投稿しない。2回直しても通らなければ needs-human にして止める。
@@ -98,7 +102,10 @@ node "$ORCH" post --key <key> --kind memo --body /tmp/memo.md --update # 回答�
 
 スクリプトが見つからないときは、投稿前に目視で確認する。
 
-- [ ] 先頭に `<!-- ai-memo v1 -->`（または `ai-split`）がある
+理解メモ（`lint memo` の代わり）
+
+- [ ] 先頭に `<!-- ai-memo v1 -->` がある
+- [ ] `## 理解メモ` の見出しがある
 - [ ] **やること** が1行
 - [ ] 引用行（なぜ・現状・範囲）がちょうど3行
 - [ ] 例の表のデータ行が5行以内
@@ -106,6 +113,16 @@ node "$ORCH" post --key <key> --kind memo --body /tmp/memo.md --update # 回答�
 - [ ] スケルトンが20行以内
 - [ ] mermaid図が1枚だけ
 - [ ] フッタにスタンプの案内がある（文面は `orch stamps` が出す）
+
+分割案（`lint split` の代わり）
+
+- [ ] 先頭に `<!-- ai-split v1 -->` がある
+- [ ] `## 分割案` の見出しがある
+- [ ] **やること** が1行
+- [ ] 引用行（なぜ・現状・範囲）がちょうど3行
+- [ ] Sub Issue の表が1行以上あり、各行が1行で収まっている（件数の上限は無い）
+- [ ] 確認事項のチェックボックスが3つ以内
+- [ ] フッタにスタンプの案内がある
 
 ## 注意事項
 

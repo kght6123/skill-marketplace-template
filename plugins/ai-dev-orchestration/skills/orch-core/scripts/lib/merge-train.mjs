@@ -52,6 +52,10 @@ export function evaluate(entry, pr) {
   if (view.state === "MERGED") return { mergeable: false, merged: true, reasons: ["マージ済み"] };
 
   const reasons = [];
+  // GitHub 側の条件が揃っていても、Issue が止まっていればマージしない。
+  // needs-human / parked は「人間に渡した」状態で、他のエンジニアが Approve しても解けない。
+  if (entry.status !== "pr-review") reasons.push(`Issue の status が ${entry.status}（pr-review のときだけマージする）`);
+  if (view.state !== "OPEN") reasons.push(`PR が ${view.state}`);
   // セルフレビューの承認が先。他エンジニアが先に Approve しても、ここを飛ばさない
   if (!pr.selfApproved) reasons.push("セルフレビューが未承認（承認用コメントにスタンプが無い）");
   else if (pr.approvedSha !== view.headRefOid) {

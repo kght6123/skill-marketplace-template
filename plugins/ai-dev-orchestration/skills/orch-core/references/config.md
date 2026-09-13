@@ -64,7 +64,7 @@ node "$ORCH" profile --human             # 今どれで動いているか
 
   "wip": { "selfReview": 3, "memoReview": 3, "splitReview": 2 },
   "sizing": { "maxPrs": 10, "maxExamples": 5, "maxDepth": 3 },
-  "limits": { "memoPerTick": 3, "implementPerBuild": 1, "maxStackedPrs": 10, "parallelWorkers": 12 },
+  "limits": { "memoPerTick": 3, "implementPerBuild": 1, "maxStackedPrs": 10, "parallelWorkers": 12, "leaseTtlMin": 60 },
 
   "nextTask": {
     "focus": { "sameProjectFirst": true, "timeboxMin": 45 },
@@ -126,6 +126,7 @@ node "$ORCH" profile --human             # 今どれで動いているか
 | `limits.memoPerTick` | tick 1回で処理するメモの最大件数 |
 | `limits.implementPerBuild` | build 1回で実装する件数 |
 | `limits.parallelWorkers` | 同時に起動するワーカーの数（既定12）。同じIssueに割り当てる worktree の連番の上限でもある |
+| `limits.leaseTtlMin` | 予約（lease）の有効期限（分）。既定は `worker.timeoutMin` の2倍。短すぎると処理中の件を他のマネージャに取られる |
 | `review.maxRounds` | block の修正を試す回数。超えたら needs-human |
 | `review.onError` | レビューが落ちた・結果が不正・結果が返らなかったとき。`needs-human`（既定、止める）か `skip`（飛ばす） |
 | `review.steps[].skill\|subagent\|command\|builtin` | 指定方法は4種類。`skill` / `subagent` はAIが実行し `orch review record` で結果を渡す |
