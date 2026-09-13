@@ -61,6 +61,25 @@ export function missingSteps(config, results = [], changedFiles = []) {
   return requiredSteps(config, changedFiles).filter((id) => !got.has(id));
 }
 
+// レビューの合否を1か所で決める。ワーカー経路（finishEnvelope）と
+// マネージャ経路（review status）で同じ判定を使う。
+//
+//   step が揃っているか / block の指摘が残っていないか
+//
+// 揃っているかだけを見ると、「memo-check が block と言っているコード」でも
+// PR作成からマージまで進めてしまう。
+export function reviewVerdict(config, results = [], changedFiles = []) {
+  const missing = missingSteps(config, results, changedFiles);
+  const blocking = results
+    .flatMap((r) => (r.findings || []).map((f) => ({ ...f, reviewer: r.reviewer })))
+    .filter((f) => f.severity === "block");
+  return {
+    ok: missing.length === 0 && blocking.length === 0,
+    missing,
+    blocking,
+  };
+}
+
 // command 型を実行し、AI が回すべき step を返す
 export function run(config, { key, pr: prNumber, changedFiles = [] }) {
   prRecord(loadState(), key, prNumber); // 先に存在確認だけする
@@ -76,6 +95,13 @@ export function run(config, { key, pr: prNumber, changedFiles = [] }) {
         const check = validateResult(parsed);
         if (!check.ok) {
           executed.push({ id: step.id, ok: false, errors: check.errors });
+          continue;
+        }
+        if (parsed.reviewer !== step.id) {
+          executed.push({
+            id: step.id, ok: false,
+            errors: [`step ${step.id} の出力の reviewer が ${parsed.reviewer} になっている`],
+          });
           continue;
         }
         collected[step.id] = parsed;
@@ -109,6 +135,19 @@ export function record(config, { key, pr: prNumber, step, resultFile }) {
   const parsed = JSON.parse(fs.readFileSync(resultFile, "utf8"));
   const check = validateResult(parsed);
   if (!check.ok) return { ok: false, errors: check.errors, onError: config.review.onError };
+  // step と結果の reviewer が食い違っていたら受け取らない。
+  // 受け取ると、別のレビュアーの結果で security を「完了」にできてしまう
+  if (parsed.reviewer !== step) {
+    return {
+      ok: false,
+      errors: [`--step ${step} に ${parsed.reviewer} の結果は記録できません（名前を合わせてください）`],
+      onError: config.review.onError,
+    };
+  }
+  const known = (config.review?.steps || []).some((s) => s.id === step);
+  if (!known) {
+    return { ok: false, errors: [`設定に無い step です: ${step}`], onError: config.review.onError };
+  }
   return updateState((state) => {
     const { pr } = prRecord(state, key, prNumber);
     pr.review.results[step] = parsed;

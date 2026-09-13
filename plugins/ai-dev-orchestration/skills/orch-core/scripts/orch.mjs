@@ -43,7 +43,7 @@ import * as review from "./lib/review.mjs";
 import { mergeTrain, classifyConflict } from "./lib/merge-train.mjs";
 import { runWorker, parseEnvelope, finishEnvelope, flushPending, plannedBranch } from "./lib/worker.mjs";
 import { claimWork, releaseLease, reapLeases, leaseStatus } from "./lib/lease.mjs";
-import { assignReviewers, needsReviewer, pickReviewers } from "./lib/assign.mjs";
+import { assignReviewers, needsReviewer, pickReviewers, reapReservations } from "./lib/assign.mjs";
 import { emojiFor, approveNames, parkNames, redoNames } from "./lib/stamps.mjs";
 
 const { opts, positional } = parseArgs(process.argv.slice(2));
@@ -162,7 +162,11 @@ async function main() {
       // レビュアーの割り当て。誰が空いているかを AI に考えさせない
       requireConfigured(config);
       if (positional[1] === "list") {
+        reapReservations(); // 落ちて残った予約を先に片付ける
         return emit({ command: "assign list", items: needsReviewer(loadState()) });
+      }
+      if (positional[1] === "reap") {
+        return emit({ command: "assign reap", ...reapReservations() });
       }
       if (!opts.key || !opts.pr) return fail("--key と --pr が要ります");
       if (opts.plan) {
@@ -233,8 +237,17 @@ async function main() {
         return emit({ command: "state set", entry });
       }
       if (sub === "repair") {
-        // 壊れた state を人間が直すための非常口。AI の手順では使わない。
-        // 通常の遷移は必ず sync / post / worker / merge-train 経由で起こす。
+        // 壊れた state を人間が直すための非常口。
+        //
+        // 「AIは使わない」と書くだけでは、マネージャのAIが1コマンドで
+        // 判定を迂回できてしまう。危険な操作を権限でも縛る方針に合わせ、
+        // 人間が明示的に環境変数を立てたときだけ動くようにする。
+        if (process.env.ORCH_ALLOW_REPAIR !== "1") {
+          return fail(
+            "state repair は人間用です。実行するには ORCH_ALLOW_REPAIR=1 を明示してください" +
+            "（通常の遷移は sync / post / worker / merge-train が決めます）",
+          );
+        }
         const key = positional[2];
         if (!key) return fail("キーを指定してください（org/repo#123）");
         const entry = updateState((fresh) => {

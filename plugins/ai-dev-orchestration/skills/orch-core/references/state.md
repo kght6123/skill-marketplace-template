@@ -23,6 +23,7 @@
       "parkedFrom": null,
       "lease": null,
       "pendingApply": null,
+      "generation": 0,
       "parkedBy": null,
       "sizing": { "estimatedPrs": 3, "examples": 3 },
       "prs": [
@@ -80,6 +81,22 @@
 掛けたときの status を `parkedFrom` に、どの面（本文かコメントか）で押されたかを
 `parkedBy` に残す。外れたら `parkedFrom` へ戻す。
 
+## 承認と SHA
+
+承認用コメントには、投稿した時点の head を `approvalTargetSha` として記録する。
+スタンプが有効になるのは **`approvalTargetSha` が GitHub の現在の head と同じとき**だけ。
+
+「今の headSha」に後から結び付けると、こうなる。
+
+```
+H1 への 🚀 → H2 を push
+  sync#1: 承認を無効化（headSha は H2 になる）
+  sync#2: 同じ古い 🚀 を読み、approvedSha = 現在の H2 → 承認が復活
+```
+
+誰もレビューしていないコミットがマージ条件を満たすので、スタンプは必ず
+「押された対象の SHA」に紐づける。PRに push したら、新しい承認用コメントを投稿し直す。
+
 ## 予約（lease）
 
 `lease` は「この件は今このマネージャが処理している」という印。status とは別の層で、
@@ -105,9 +122,14 @@
 「pr-review なのに押すコメントが無い」状態にならない。
 
 ```json
-{ "action": "implement-continue", "leaseId": "…", "finalStatus": "implementing",
+{ "action": "implement-continue", "fromStatus": "implementing", "generation": 4,
+  "finalStatus": "implementing",
   "comments": [{ "kind": "approve", "pr": 50, "body": "…" }] }
 ```
+
+**予約IDには紐づけない。** ワーカーが終われば予約は返るので、再送のときには必ず消えていて
+二度と適用できなくなる。代わりに「預けたときの status と世代（`generation`）」に紐づける。
+`generation` は status が動くたびに増えるので、その間に人間が止めていれば再送は通らない。
 
 `finalStatus` を持つのは、**コメントの種類から status を逆算しないため**。approve コメントでも
 スタックの途中なら `implementing` のまま進む。逆算すると、一時的なAPI障害で

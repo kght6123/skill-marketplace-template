@@ -34,7 +34,7 @@ Claude Code 固有の機能は使わない。ワーカーのCLIは差し替え�
 
 1. **スクリプトの判定を再計算しない**。status も並び順も WIP の可否もマージ可否も、`orch` の出力が正
 2. **読むのは `--json` の出力だけ**。`--human` の整形出力は人間向けで、AIは参照しない
-3. **exit code 1 か `"needs_human": true` が返ったら、そこで止めて人間に渡す**。exit code 2 は lint 違反で、これは作り直し
+3. **exit code 1 か `"needs_human": true` が返ったら、そこで止めて人間に渡す**。exit code 2 は lint 違反で、これは作り直し。ワーカーが `needs_human` を返したときは、PRもコメントも作らずにそこで止まる
 4. **state.json を直接編集しない**。書き込みは `orch state set` のみで、書けるのは生成した事実（見積もり・タイトル・依存など）だけ。status やマージ可否は書けない（`state repair` は人間が壊れた state を直すための非常口で、AIの手順では使わない）
 5. **AIがやらないこと**: スタンプを押さない／Issue本文を編集しない／自分が作ったもの以外のコメントを編集しない／`gh pr merge` を直接叩かない（マージは `orch merge-train` だけ）
 6. **ワーカーは state を書かない**。`ORCH_ROLE=worker` のセッションでは `orch` が書き込み系を拒否する。結果はエンベロープで返す
@@ -42,7 +42,8 @@ Claude Code 固有の機能は使わない。ワーカーのCLIは差し替え�
 8. **ワーカーの終了コードが 0 でなければ、エンベロープがあっても採用しない**。出力の後で落ちた可能性があるため
 9. **マネージャを並行させるなら `orch next --claim`**。予約を取らずに選ぶと、同じ Issue を2本が処理して WIP も超える
 10. **ブランチ名を自分で決めない**。スタックの何本目かはマネージャが state から決め、`ORCH_BRANCH` で渡す
-11. **設定された AI レビューを飛ばさない**。`review.steps` のうち今回必要なものが1つでも欠けていたらPRを作らない（`memo-check` は設定から外しても必須）
+11. **設定された AI レビューを飛ばさない**。`review.steps` のうち今回必要なものが1つでも欠けていたら、また `block` の指摘が残っていたらPRを作らない（`memo-check` は設定から外しても必須）
+12. **分からないことを「無い」にしない**。変更ファイル・Issue一覧・リアクションが取れなければ、0件として進めずに止める
 
 ---
 
@@ -78,7 +79,7 @@ node "$ORCH" init          # $ORCH_HOME（既定 ~/.orch）に state.json と or
 | `orch next --mode memo\|build [--claim]` | AIが次に処理する1件を決める。`--claim` で予約まで取る |
 | `orch next [--minutes N]` | 人間向けの「今やること」1件 |
 | `orch state list\|get\|set` | 状態の読み書き（set は生成した事実だけ） |
-| `orch state repair` | 人間が壊れた state を直す非常口。AIは使わない |
+| `orch state repair` | 人間が壊れた state を直す非常口。`ORCH_ALLOW_REPAIR=1` が要る。AIは使わない |
 | `orch post --kind memo\|split\|approve\|triage` | コメント投稿（commentIdの記録と状態遷移まで） |
 | `orch lint memo\|split\|pr <file>` | 生成物の上限検査。種類ごとに別の検査。exit 2 なら作り直し |
 | `orch review run\|record\|status` | AIレビューのpipeline |
@@ -115,13 +116,16 @@ state.json を失った場合は `orch sync --rebuild` でコメントの目印�
     "deny": [
       "Bash(gh api:*reactions*)",
       "Bash(gh pr merge:*)",
-      "Bash(gh issue edit:*)"
+      "Bash(gh issue edit:*)",
+      "Bash(node:*orch.mjs state repair*)"
     ]
   }
 }
 ```
 
 リアクション作成APIを拒否しておくと、AIが自分で🚀を押して自分の作ったものを承認する事故が起きない。
+`state repair` も deny に入れる。こちらは環境変数（`ORCH_ALLOW_REPAIR=1`）でも縛ってあるが、
+中心の境界なので文章・権限・スクリプトの3か所で塞ぐ。
 
 ワーカーが動く**各リポジトリ側**の `.claude/settings.json` には、さらに外向きの操作を足して拒否する。
 ワーカーの仕事は「今いる worktree でコードを直してコミットする」ことだけで、PRもコメントも作らない。

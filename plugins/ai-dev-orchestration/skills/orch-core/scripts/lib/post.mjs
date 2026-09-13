@@ -132,7 +132,11 @@ export function post({ key, kind, bodyFile, pr, update, advanceStatus = true }) 
       if (!target) throw new Error(`PR #${pr} が state に無い`);
       target.approvalCommentId = result.id;
       target.selfApproved = false;
-      target.approvedSha = target.headSha;
+      target.approvedSha = null;
+      // このコメントが対象にしている SHA。押されたスタンプは必ずこれに紐づく。
+      // 「今の headSha」に後から結び付けると、古いコミットへの承認が
+      // 新しいコミットの承認として復活してしまう。
+      target.approvalTargetSha = target.headSha || null;
       if (advanceStatus) {
         setStatus(entry, "pr-review");
         transition.to = "pr-review";

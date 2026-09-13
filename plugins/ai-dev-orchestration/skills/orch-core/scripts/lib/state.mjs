@@ -87,7 +87,20 @@ export function withLock(fn, { timeoutMs = 10_000 } = {}) {
         // 不明なときは奪わず、経過時間だけで判断する。
         const dead = pid !== null && !processIsAlive(pid);
         if (dead || age > LOCK_STALE_MS) {
-          fs.rmSync(LOCK_PATH, { force: true });
+          // 剥がすのも排他でなければならない。
+          // 2プロセスが同じ古いロックを stale と判断すると、
+          //   A: 古いロックを削除 → A が新しいロックを作る
+          //   B: 「古いロック」のつもりで A の新しいロックを削除 → B も作る
+          // となって両方が critical section に入れてしまう。
+          // rename は1プロセスしか成功しないので、これで持ち主を1つに決める。
+          const reap = `${LOCK_PATH}.reap.${process.pid}.${Date.now()}`;
+          try {
+            fs.renameSync(LOCK_PATH, reap);
+          } catch (reapErr) {
+            if (reapErr.code === "ENOENT") continue; // 別のプロセスが先に剥がした
+            throw reapErr;
+          }
+          fs.rmSync(reap, { force: true });
           continue;
         }
         if (Date.now() > deadline) {
@@ -147,6 +160,7 @@ export function newEntry(key, overrides = {}) {
     milestoneDue: null,
     lease: null, // 論理タスクの予約（lease.mjs）。二重実行の防止に使う
     pendingApply: null, // 投稿待ちのコメントと、通ってから進める予定の status
+    generation: 0, // status が動くたびに増える。やり残しの再送の照合に使う
     enteredStatusAt: new Date().toISOString(),
     ...overrides,
   };
@@ -154,7 +168,12 @@ export function newEntry(key, overrides = {}) {
 
 export function setStatus(entry, status, extra = {}) {
   if (!STATUSES.includes(status)) throw new Error(`未知の status: ${status}`);
-  if (entry.status !== status) entry.enteredStatusAt = new Date().toISOString();
+  if (entry.status !== status) {
+    entry.enteredStatusAt = new Date().toISOString();
+    // 世代。やり残しの再送が「自分が預けたときのまま」かを確かめるのに使う。
+    // 一時的な予約IDに紐づけると、予約を返した後に再送できなくなる。
+    entry.generation = (entry.generation || 0) + 1;
+  }
   entry.status = status;
   Object.assign(entry, extra);
   return entry;

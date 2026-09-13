@@ -8,9 +8,21 @@
 //
 // AI に「誰が空いていそうか」を考えさせない。ここが揺れると、
 // 特定の人に偏って人間側の行列が伸びる。
-import { loadState, updateState, parseKey } from "./state.mjs";
+import os from "node:os";
+import crypto from "node:crypto";
+import { loadState, updateState, parseKey, processIsAlive } from "./state.mjs";
 import { reviewersFor } from "./config.mjs";
 import { gh, isDryRun } from "./gh.mjs";
+
+// 予約は期限付きにする。GitHub に依頼を送る途中でプロセスが落ちると、
+// 期限が無ければ reviewerPending が残り続けて誰にも割り当てられなくなる。
+const RESERVE_TTL_MS = 5 * 60_000;
+
+function reservationIsLive(res) {
+  if (!res || !res.reviewers?.length) return false;
+  if (res.hostname === os.hostname() && res.pid && processIsAlive(res.pid)) return true;
+  return new Date(res.expiresAt || 0).getTime() > Date.now();
+}
 
 // その人に今いくつ依頼しているか（マージ済みは数えない）。
 // 予約中（reviewerPending）も数える。2つのマネージャが同時に割り当てたとき、
@@ -20,7 +32,8 @@ export function openCounts(state, users) {
   for (const entry of Object.values(state.issues)) {
     for (const pr of entry.prs || []) {
       if (pr.merged) continue;
-      for (const who of [...(pr.reviewers || []), ...(pr.reviewerPending || [])]) {
+      const pending = reservationIsLive(pr.reviewerPending) ? pr.reviewerPending.reviewers : [];
+      for (const who of [...(pr.reviewers || []), ...pending]) {
         if (who in counts) counts[who] += 1;
       }
     }
@@ -93,11 +106,18 @@ export function assignReviewers(config, { key, pr: prNumber }) {
     const decision = pickReviewers(state, config, key, prNumber);
     if (!decision.ok || decision.already) return decision;
     const pr = (state.issues[key]?.prs || []).find((p) => p.number === Number(prNumber));
-    if ((pr.reviewerPending || []).length) {
+    if (reservationIsLive(pr.reviewerPending)) {
       return { ok: false, reason: "別のマネージャが割り当て中", pending: pr.reviewerPending };
     }
-    pr.reviewerPending = decision.reviewers; // 枠を押さえる
-    return decision;
+    // 枠を押さえる。期限と持ち主を書いておき、落ちても回収できるようにする
+    pr.reviewerPending = {
+      id: crypto.randomUUID(),
+      reviewers: decision.reviewers,
+      pid: process.pid,
+      hostname: os.hostname(),
+      expiresAt: new Date(Date.now() + RESERVE_TTL_MS).toISOString(),
+    };
+    return { ...decision, reservationId: pr.reviewerPending.id };
   });
   if (!reserved.ok || reserved.already) return reserved;
 
@@ -111,7 +131,7 @@ export function assignReviewers(config, { key, pr: prNumber }) {
     // 送れなかったら予約を戻す。戻さないと誰にも割り当てられなくなる
     updateState((state) => {
       const pr = (state.issues[key]?.prs || []).find((p) => p.number === Number(prNumber));
-      if (pr) pr.reviewerPending = [];
+      if (pr?.reviewerPending?.id === reserved.reservationId) pr.reviewerPending = null;
       return true;
     });
     throw err;
@@ -121,9 +141,25 @@ export function assignReviewers(config, { key, pr: prNumber }) {
     const pr = (state.issues[key]?.prs || []).find((p) => p.number === Number(prNumber));
     if (!pr) throw new Error(`PR #${prNumber} が state に無い`);
     pr.reviewers = reserved.reviewers;
-    pr.reviewerPending = [];
+    pr.reviewerPending = null;
     pr.reviewRequestedAt = new Date().toISOString();
     return { ok: true, key, pr: Number(prNumber), ...reserved, dryRun: isDryRun() };
+  });
+}
+
+// 落ちて残った予約を回収する。期限が切れていて、持ち主も生きていないものだけ。
+export function reapReservations() {
+  return updateState((state) => {
+    const reaped = [];
+    for (const entry of Object.values(state.issues)) {
+      for (const pr of entry.prs || []) {
+        if (pr.reviewerPending && !reservationIsLive(pr.reviewerPending)) {
+          reaped.push({ key: entry.key, pr: pr.number, reviewers: pr.reviewerPending.reviewers });
+          pr.reviewerPending = null;
+        }
+      }
+    }
+    return { reaped };
   });
 }
 
@@ -134,6 +170,7 @@ export function needsReviewer(state) {
     if (entry.status !== "pr-review") continue;
     for (const pr of entry.prs || []) {
       if (pr.merged || (pr.reviewers || []).length || !pr.selfApproved) continue;
+      if (reservationIsLive(pr.reviewerPending)) continue; // 割り当て中
       out.push({ key: entry.key, pr: pr.number });
     }
   }

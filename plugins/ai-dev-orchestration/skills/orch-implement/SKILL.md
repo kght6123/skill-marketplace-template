@@ -87,6 +87,10 @@ step の種類と共通の出力形式は `references/review-pipeline.md`。
 **設定された step を1つも飛ばさない。** マネージャは設定から「今回必要な step」を自分で計算し、
 足りなければPRを作らずに止める（`memo-check` は設定から外しても必須）。
 返す `review` の `reviewer` は、設定の `step.id` と同じ名前にする。
+`severity: "block"` の指摘が1つでも残っていたらPRは作られない。直してから返す。
+
+途中で行き詰まったら `needs_human: true` だけを返す。このときマネージャはPRもコメントも作らない。
+`pullRequest` と `needs_human: true` を同時に返しても、PRは作られない。
 
 `block` が出たら直す。2回直しても消えなければ `needs_human: true` で返して止める。
 自分のコードを自分で見ると通ってしまうので、`memo-check` は `orch-memo-check` スキルで

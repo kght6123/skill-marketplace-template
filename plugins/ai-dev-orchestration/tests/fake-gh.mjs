@@ -46,7 +46,10 @@ if (scenario.delayMs) {
 
 const joined = args.join(" ");
 
-if (args[0] === "issue" && args[1] === "list") out(scenario.issueList ?? []);
+if (args[0] === "issue" && args[1] === "list") {
+  if (scenario.issueListFails) boom("HTTP 502");
+  out(scenario.issueList ?? []);
+}
 if (args[0] === "issue" && args[1] === "view") out(scenario.issueView ?? {});
 if (args[0] === "pr" && args[1] === "view") out(scenario.prView ?? {});
 if (args[0] === "pr" && args[1] === "merge") out("merged\n");

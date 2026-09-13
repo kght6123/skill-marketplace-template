@@ -31,25 +31,41 @@ function since(snapshot) {
 
 // ---------------------------------------------------------------- 1. 収集
 
+// Issue の一覧。1ページ100件で、返ってきた件数が上限と同じなら次のページも取る。
+// 失敗したら null を返す（0件と区別する）。
+function listIssues(repo, search, pageSize = 100, maxPages = 20) {
+  const all = [];
+  for (let page = 0; page < maxPages; page++) {
+    const got = ghJson(
+      [
+        "issue", "list", "--repo", repo, "--state", "open",
+        "--limit", String(pageSize * (page + 1)),
+        "--json", "number,title,updatedAt,milestone",
+        ...search,
+      ],
+      { allowFail: true },
+    );
+    if (!got) return null; // 取得できなかった。0件と混ぜない
+    all.length = 0;
+    all.push(...got);
+    if (got.length < pageSize * (page + 1)) break; // まだ上限に届いていない
+  }
+  return all;
+}
+
 export function collectFacts(config, snapshot) {
   const listed = {};
   for (const repo of repoNames(config)) {
     const search = since(snapshot) ? ["--search", `updated:>=${since(snapshot)}`] : [];
-    listed[repo] =
-      ghJson(
-        [
-          "issue", "list", "--repo", repo, "--state", "open", "--limit", "100",
-          "--json", "number,title,updatedAt,milestone",
-          ...search,
-        ],
-        { allowFail: true },
-      ) || [];
+    // 取得失敗と「0件」を区別する。潰すと、その日の新規 Issue を取りこぼしたまま
+    // lastSync だけ進み、次回の検索範囲から外れる
+    listed[repo] = listIssues(repo, search);
   }
 
   // 既知のIssueと、今回一覧に出てきたIssueの両方を見る
   const keys = new Set(Object.keys(snapshot.issues));
   for (const [repo, issues] of Object.entries(listed)) {
-    for (const issue of issues) keys.add(`${repo}#${issue.number}`);
+    for (const issue of issues || []) keys.add(`${repo}#${issue.number}`);
   }
 
   const entries = {};
@@ -242,12 +258,31 @@ function applyCommentStamps(entry, config, f, transitions, degraded) {
   for (const pr of entry.prs || []) {
     const pf = f.prs?.[pr.number];
     if (!pf) continue;
-    // 承認は、コメントの更新日時が取れているときだけ有効
+    // 承認は、コメントの更新日時が取れているときだけ有効。
+    //
+    // さらに「そのコメントが対象にしていた SHA」が今の head と同じでなければ通さない。
+    // 承認を state の現在の headSha に後付けで結び付けると、
+    //   H1 への 🚀 → H2 を push → sync#1 で無効化（headSha は H2 になる）
+    //   → sync#2 で同じ古い 🚀 が H2 の承認として復活
+    // という経路で、誰もレビューしていないコミットがマージ条件を満たしてしまう。
     if (pf.approval?.comment?.updated_at && pf.approval.reactions) {
       const stamps = ownStamps(pf.approval.reactions, config.account);
       if (matchedApprove(stamps, pf.approval.comment.updated_at, config)) {
-        pr.selfApproved = true;
-        pr.approvedSha = pr.headSha;
+        const currentHead = pf.view?.headRefOid || null;
+        if (!currentHead) {
+          degraded.push({ key: entry.key, reason: `PR #${pr.number} の現在の head を取得できない` });
+        } else if (pr.approvalTargetSha && pr.approvalTargetSha === currentHead) {
+          pr.selfApproved = true;
+          pr.approvedSha = currentHead;
+        } else {
+          // 古いコミットへの承認。復活させない
+          pr.selfApproved = false;
+          pr.approvedSha = null;
+          degraded.push({
+            key: entry.key,
+            reason: `PR #${pr.number} の承認は ${pr.approvalTargetSha || "不明"} 宛てで、現在の head (${currentHead}) ではない`,
+          });
+        }
       }
     } else if (pf.approval) {
       degraded.push({ key: entry.key, reason: `PR #${pr.number} の承認用コメントを取得できない` });
@@ -299,7 +334,7 @@ export function applyFacts(state, config, facts) {
   const degraded = [];
 
   for (const [repo, issues] of Object.entries(facts.listed)) {
-    for (const issue of issues) {
+    for (const issue of issues || []) { // null は取得失敗。下で lastSync を止める
       const key = `${repo}#${issue.number}`;
       const entry = state.issues[key] || newEntry(key);
       entry.title = issue.title;
@@ -321,7 +356,19 @@ export function applyFacts(state, config, facts) {
   }
 
   closeParents(state, transitions);
-  state.lastSync = facts.collectedAt;
+
+  // 一覧を取れなかったリポジトリがあるなら、検索の起点（lastSync）を進めない。
+  // 進めると、そのとき一覧に出なかった Issue が次回の検索範囲から外れて消える。
+  const failedRepos = Object.entries(facts.listed || {})
+    .filter(([, issues]) => issues === null)
+    .map(([repo]) => repo);
+  if (failedRepos.length) {
+    for (const repo of failedRepos) {
+      degraded.push({ key: repo, reason: "Issue一覧を取得できない（lastSync を進めない）" });
+    }
+  } else {
+    state.lastSync = facts.collectedAt;
+  }
   // セルフレビューが済んでレビュアーが未割り当てのPR。マネージャが orch assign を実行する
   return {
     transitions, degraded,

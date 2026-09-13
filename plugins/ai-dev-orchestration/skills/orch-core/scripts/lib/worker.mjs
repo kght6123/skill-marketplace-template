@@ -12,7 +12,7 @@ import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { repoConfig, worktreeRoot } from "./config.mjs";
 import { loadState, updateState, setStatus, parseKey, STATUSES, processIsAlive } from "./state.mjs";
-import { validateResult, missingSteps } from "./review.mjs";
+import { validateResult, reviewVerdict } from "./review.mjs";
 import { post } from "./post.mjs";
 import { lintPr } from "./lint.mjs";
 import { ghJson, gh, isDryRun } from "./gh.mjs";
@@ -132,8 +132,18 @@ function claimSlot(dir, staleMs) {
   } catch (err) {
     if (err.code !== "EEXIST") throw err;
     if (isBusy(dir, staleMs)) return false; // 動いている。次の枠へ
-    // 残骸。剥がして取り直す（ここで負けたら次の枠へ進む）
-    fs.rmSync(lock, { force: true });
+    // 残骸を剥がすのも排他でなければならない。単に消すと、
+    //   A: 残骸を削除 → A が新しいロックを作る
+    //   B: 「残骸」のつもりで A の新しいロックを削除 → B も作る
+    // となって同じ worktree を2本が掴む。rename は1プロセスしか成功しない。
+    const reap = `${lock}.reap.${process.pid}.${Date.now()}`;
+    try {
+      fs.renameSync(lock, reap);
+    } catch (reapErr) {
+      if (reapErr.code === "ENOENT") return false; // 別のプロセスが先に取った
+      throw reapErr;
+    }
+    fs.rmSync(reap, { force: true });
     try {
       fs.writeFileSync(lock, body, { flag: "wx" });
       return true;
@@ -395,7 +405,13 @@ export function applyEnvelope(data, { action, lease = null, advanceStatus = true
       }
     }
 
-    if (pendingApply) entry.pendingApply = pendingApply;
+    if (pendingApply) {
+      entry.pendingApply = {
+        ...pendingApply,
+        fromStatus: entry.status,
+        generation: entry.generation || 0,
+      };
+    }
 
     // status を進めるのは、投稿すべきコメントを出し終えてから（advanceStatus）。
     // 先に pr-review にすると、承認用コメントの投稿が落ちたときに
@@ -412,11 +428,16 @@ export function applyEnvelope(data, { action, lease = null, advanceStatus = true
 // security レビューを飛ばせてしまう。
 export function changedFiles(dir, base) {
   const git = { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] };
+  if (!dir || !base) {
+    return { ok: false, error: "作業ディレクトリか比較先が分からない", files: null };
+  }
   try {
     const out = execFileSync("git", ["-C", dir, "diff", "--name-only", `${base}...HEAD`], git);
-    return out.split("\n").map((l) => l.trim()).filter(Boolean);
-  } catch {
-    return [];
+    return { ok: true, files: out.split("\n").map((l) => l.trim()).filter(Boolean) };
+  } catch (err) {
+    // 「0件」にしない。分からないまま when.paths を評価すると、
+    // security のような条件付きレビューが「対象外」として飛ばされる
+    return { ok: false, error: String(err.stderr || err.message), files: null };
   }
 }
 
@@ -553,6 +574,32 @@ export function finishEnvelope(data, {
   // os.tmpdir() 全体を許すと、他プロセスが置いたファイルまで投稿できてしまう。
   const allowedDirs = [cwd, outbox].filter(Boolean).map((d) => assertRealDir(d, "受け渡し先"));
 
+  // ワーカーが「人間に渡す」と言ったら、そこで止める。
+  // PRもコメントも作らず、やり残しも残さない。作ってしまうと、
+  // needs-human なのに自動で post-pending の対象になるなど、状態が絡まる。
+  if (data.needs_human) {
+    const stopped = applyEnvelope(data, { action, lease, advanceStatus: true });
+    return {
+      ok: false, ...extra, needs_human: true,
+      stoppedBeforeSideEffects: true,
+      errors: [`ワーカーが needs_human を返しました: ${data.notes || "（理由の記載なし）"}`],
+      applied: stopped,
+      envelope: data,
+    };
+  }
+
+  // 先に、ただの突き合わせで落とせるものを落とす（ネットワークも git も要らない）。
+  // head がマネージャの割り当てと違うなら、他の検査を待つ意味がない。
+  if (expectedBranch && data.pullRequest && data.pullRequest.head !== expectedBranch) {
+    return {
+      ok: false, ...extra, needs_human: true,
+      errors: [
+        `pullRequest.head が割り当てたブランチと違う（割り当て: ${expectedBranch} / 返答: ${data.pullRequest.head}）`,
+      ],
+      envelope: data,
+    };
+  }
+
   // 外へ出す前に、開始時の前提がまだ成り立っているかを確かめる。
   // ここで落とせば、止められた件に対してPRやコメントを作らずに済む。
   const claim = verifyClaim(loadState(), data.key, { leaseId: lease, action });
@@ -564,16 +611,29 @@ export function finishEnvelope(data, {
     };
   }
 
-  // 設定された AI レビューを1つでも飛ばしていたらPRを作らない。
-  // ワーカーが review を空で返しても通っていた（security を丸ごと飛ばせた）。
+  // 設定された AI レビューを1つでも飛ばしていたら、また block の指摘が残っていたら
+  // PRを作らない。step の有無だけを見ると、memo-check が「矛盾している」と
+  // 言っているコードでもマージまで進めてしまう。
   if (config && data.pullRequest) {
-    const files = cwd ? changedFiles(cwd, base || config.defaultBranch || "main") : [];
-    const missing = missingSteps(config, data.review || [], files);
-    if (missing.length) {
+    const changed = changedFiles(cwd, base || config.defaultBranch || "main");
+    if (!changed.ok) {
       return {
         ok: false, ...extra, needs_human: true,
-        errors: [`AIレビューが足りない: ${missing.join(" / ")}（設定された step をすべて回してください）`],
-        changedFiles: files,
+        errors: [`変更ファイルを特定できないのでレビューの要否を判断できません: ${changed.error}`],
+        envelope: data,
+      };
+    }
+    const verdict = reviewVerdict(config, data.review || [], changed.files);
+    if (!verdict.ok) {
+      return {
+        ok: false, ...extra, needs_human: true,
+        errors: [
+          ...(verdict.missing.length
+            ? [`AIレビューが足りない: ${verdict.missing.join(" / ")}（設定された step をすべて回してください）`]
+            : []),
+          ...verdict.blocking.map((f) => `${f.reviewer} が block: ${f.message}`),
+        ],
+        changedFiles: changed.files,
         envelope: data,
       };
     }
@@ -608,7 +668,11 @@ export function finishEnvelope(data, {
     action, lease, advanceStatus: false,
     pendingApply: {
       action,
-      leaseId: lease,
+      // 予約IDには紐づけない。ワーカーが終わると予約は返るので、
+      // 再送のときには必ず消えていて、二度と適用できなくなる。
+      // 代わりに「預けたときの status と世代」に紐づける
+      fromStatus: null, // applyEnvelope の中で今の値を入れる
+      generation: null,
       finalStatus: data.needs_human ? "needs-human" : data.status || null,
       comments: staged.map((c) => ({ ...c, pr: c.pr ?? created?.number ?? null })),
     },
@@ -685,8 +749,13 @@ export function flushPending(key) {
     const applied = updateState((state) => {
       const entry = state.issues[key];
       const plan = entry.pendingApply;
-      const claim = verifyClaim(state, key, { leaseId: plan?.leaseId || null, action: plan?.action });
-      if (!claim.ok) throw new Error(claim.errors.join(" / "));
+      // 預けたときから state が動いていないことだけを確かめる。
+      // 動いていれば人間が止めたか他が処理したので、status は進めない。
+      if ((entry.generation || 0) !== plan.generation || entry.status !== plan.fromStatus) {
+        throw new Error(
+          `預けたときから状態が変わっています（${plan.fromStatus} → ${entry.status}）`,
+        );
+      }
       if (plan?.finalStatus) setStatus(entry, plan.finalStatus);
       entry.pendingApply = null;
       return { key, status: entry.status, prs: entry.prs };
