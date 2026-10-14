@@ -11,7 +11,8 @@
 
 ## Issue/PRでの使い方
 - 長さは30〜90秒、場面は4〜7つ。
-- 音声は付けない。ナレーション台本を各場面の下部に字幕（1〜2行）として出す。GitHub上では無音で再生されることが多いため。
+- 字幕は必ず出す。GitHub上では無音で再生されることが多いため。
+- ナレーションは任意（Karpathy氏の原文は音声付きを想定）。付けるときはローカルTTS（VOICEVOX）で場面ごとに読み上げ、`scripts/narrate.py` で動画と合成する。有料APIは使わない。
 - 構成の型：①今の状態 ②問題/変更の要点 ③新しい流れ（Mermaid図と同じ要素を動かす） ④影響範囲 ⑤確認方法の一言。
 - Mermaid図と同じ用語・同じ色の対応を使う。読者が図と動画を結び付けられるようにする。
 
@@ -48,3 +49,9 @@ class Explain(Scene):
 ```
 
 レンダリングは `scripts/render_manim.sh explain.py Explain` を使う。
+
+## ナレーションを付ける場合
+1. 台本を `narration.json` に書く：`[{"text": "登録された情報は、まず承認待ちになる。"}, ...]`（場面順、字幕と同じ文）。
+2. 場面の長さを読み上げに合わせる：先に `python scripts/narrate.py durations narration.json` で各文の秒数を出し、Manimの `self.wait()` をその秒数に合わせる。
+3. レンダリング後に合成：`python scripts/narrate.py mux narration.json out/explain.mp4 out/explain_voice.mp4`
+VOICEVOXエンジンが動いていなければ（`localhost:50021`）、ナレーション無しで進め、その旨をユーザーに伝える。
