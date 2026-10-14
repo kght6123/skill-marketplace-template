@@ -48,6 +48,36 @@
       "source": "./plugins/ai-dev-orchestration",
       "category": "development",
       "description": "複数プロジェクトのAI開発を、人間の処理量を上限にして回すオーケストレーションのスキル群"
+    },
+    {
+      "name": "gh-readable-report",
+      "source": "./plugins/gh-readable-report",
+      "category": "development",
+      "description": "Claude Codeが作成・更新するGitHubのIssueやPull Requestを、人間が短時間で理解できる形にするスキル"
+    },
+    {
+      "name": "art-style-picker",
+      "source": "./plugins/art-style-picker",
+      "category": "creative",
+      "description": "AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）の画風を、Danbooruの画風タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル"
+    },
+    {
+      "name": "composition-picker",
+      "source": "./plugins/composition-picker",
+      "category": "creative",
+      "description": "AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）の構図を、Danbooruの構図・ポーズ系タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル"
+    },
+    {
+      "name": "character-look-picker",
+      "source": "./plugins/character-look-picker",
+      "category": "creative",
+      "description": "AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）で描く成人女性キャラの外見（髪色・髪型・目・表情・体型・肌・アクセント）を、Danbooruタグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル"
+    },
+    {
+      "name": "outfit-picker",
+      "source": "./plugins/outfit-picker",
+      "category": "creative",
+      "description": "AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）で描く成人女性キャラの服装を、Danbooruの衣装タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル"
     }
   ]
 }

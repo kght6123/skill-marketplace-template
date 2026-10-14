@@ -1,0 +1,74 @@
+category	tag	ja_name	description
+shot	portrait	バストアップ	胸から上。表情と上半身の雰囲気が主役
+shot	upper body	上半身	腰〜頭。手元の仕草も入れられる万能サイズ
+shot	cowboy shot	カウボーイショット	太もも〜頭。衣装と表情を両立
+shot	full body	全身	頭から足先まで。衣装やポーズ全体を見せる
+shot	close-up	アップ	顔に寄る。感情が強く伝わる
+shot	face	顔アップ	顔だけを大きく。アイコンやサムネ向き
+shot	wide shot	引き	人物を小さく、背景・世界観を見せる
+shot	very wide shot	超引き	風景の中にぽつんと人物。物語性が出る
+shot	lower body	下半身	足元中心。靴やスカートの動きを見せる
+shot	head out of frame	顔切れ	あえて顔を外して想像させる構図
+shot	cropped legs	足切れ	膝あたりで切る自然な切り取り
+angle	from above	俯瞰	上から見下ろす。かわいさ・小ささが出る
+angle	from below	あおり	下から見上げる。迫力・存在感
+angle	from side	真横	横顔のシルエットがきれいに出る
+angle	from behind	後ろから	後ろ姿。情緒や余韻を残す
+angle	dutch angle	ダッチアングル	画面を傾けて動き・不安定さ
+angle	straight-on	正面	真正面。アイコン的で強い印象
+angle	pov	一人称視点	見ている人の目線。距離感が近い
+angle	fisheye	魚眼	広角で歪む。ポップで躍動的
+angle	from outside	窓の外から	ガラス越しに覗く構図
+angle	reflection	映り込み	鏡や水面に映った姿を見せる
+angle	overhead shot	真上から	完全な真上視点。寝そべりや地面に広がる構図
+pose	standing	立ち	基本の立ち姿
+pose	sitting	座り	落ち着いた日常感
+pose	squatting	しゃがみ	小さくまとまるかわいいポーズ
+pose	lying	寝転び	リラックス、ゆるい雰囲気
+pose	kneeling	膝立ち	素直さ・真剣さが出る
+pose	walking	歩き	動きのあるスナップ感
+pose	running	走り	躍動感・青春感
+pose	jumping	ジャンプ	元気さ全開
+pose	leaning forward	前かがみ	こちらに寄ってくる親しみ
+pose	arms up	腕上げ	伸び・開放感
+pose	hand on own cheek	頬杖	ぼんやり・考えごと
+pose	peace sign	ピース	定番の明るいポーズ
+pose	hands on own hips	腰に手	自信・強気
+pose	outstretched hand	手を差し出す	こちらへ手を伸ばす、物語の入口感
+pose	head tilt	首かしげ	あざと可愛い定番
+pose	stretching	ストレッチ	伸びをする日常の一瞬
+pose	hugging object	抱きしめ	ぬいぐるみや枕を抱える甘い雰囲気
+pose	dynamic pose	ダイナミックポーズ	大きく体をひねった動きのあるポーズ
+direction	looking at viewer	カメラ目線	こちらを見る。親密さ
+direction	looking away	目線外し	よそ見。自然体・物憂げ
+direction	looking back	振り返り	振り向きざまの一瞬
+direction	looking up	見上げ	空や何かを見上げる、希望・憧れ
+direction	looking down	見下ろし	うつむき、しっとり
+direction	looking to the side	横目	ちらっと見る、ツン・照れ
+direction	facing viewer	正面向き	体ごとこちらを向く
+direction	facing away	背中向き	背を向ける、余韻
+direction	profile	横顔	プロフィールラインを見せる
+direction	eyes closed	目閉じ	穏やか・感じ入る表情
+layout	centered	中央配置	主役をど真ん中に
+layout	rule of thirds	三分割	三分割の交点に置くバランス構図
+layout	negative space	余白多め	大きな余白でミニマル・エモい
+layout	symmetry	シンメトリー	左右対称の様式的な画面
+layout	diagonal composition	対角線構図	斜めの流れで動きを出す
+layout	foreground focus	前景あり	手前に物を置いて奥行きを作る
+layout	framed	フレーム内フレーム	窓・ドア・枝などで人物を囲む
+layout	leading lines	誘導線	道や線路の線で視線を人物へ導く
+layout	silhouette	シルエット	逆光で影だけ見せる
+layout	multiple views	複数視点	同じキャラを複数アングルで並べる
+layout	split screen	分割画面	画面を分けて対比を見せる
+layout	scenery	風景主体	背景を主役にして人物は添える
+effect	depth of field	被写界深度	背景をぼかして主役を立たせる
+effect	bokeh	玉ボケ	丸い光のボケでロマンチック
+effect	motion blur	モーションブラー	動きのブレでスピード感
+effect	motion lines	効果線	漫画的な動きの線
+effect	cinematic	シネマティック	映画の1カットのような画面
+effect	letterboxed	レターボックス	上下黒帯の映画フレーム
+effect	border	枠線	画面を枠で囲む
+effect	speed lines	集中線	視線を中心に集める漫画演出
+effect	lens flare	レンズフレア	光の反射で眩しさ・爽やかさ
+effect	perspective	強パース	遠近感を誇張した迫力
+effect	foreshortening	短縮法	手前の手足を大きく描く迫力

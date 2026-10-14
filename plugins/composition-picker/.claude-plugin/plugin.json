@@ -1,0 +1,9 @@
+{
+  "name": "composition-picker",
+  "description": "AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）の構図を、Danbooruの構図・ポーズ系タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル",
+  "version": "1.0.0",
+  "author": {
+    "name": "kght6123",
+    "url": "https://github.com/kght6123"
+  }
+}

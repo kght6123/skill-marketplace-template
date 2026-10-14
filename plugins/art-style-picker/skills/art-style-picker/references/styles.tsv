@@ -1,0 +1,84 @@
+category	tag	ja_name	description
+medium	watercolor (medium)	水彩	にじみと透明感。淡くやさしい、絵本っぽい空気
+medium	oil painting (medium)	油彩	厚塗りの重厚感。絵画的で落ち着いた質感
+medium	acrylic paint (medium)	アクリル	油彩より明快でポップな発色の筆致
+medium	gouache (medium)	ガッシュ	不透明でマットな色面。レトロなイラスト感
+medium	colored pencil (medium)	色鉛筆	紙の目が見える柔らかい線と塗り
+medium	pastel (medium)	パステル	粉っぽくふんわりした発色、夢見がちな雰囲気
+medium	marker (medium)	コピック/マーカー	アナログ漫画家の手描きカラー感
+medium	ink (medium)	インク	墨の強弱が効いたシャープな線画
+medium	crayon (medium)	クレヨン	子どもの落書き風の素朴で温かい質感
+medium	graphite (medium)	鉛筆	モノクロの鉛筆デッサン調
+medium	traditional media	アナログ画材	手描き全般の紙っぽさ・ムラを足す
+medium	pixel art	ドット絵	低解像度のレトロゲーム風
+medium	3d	3DCG	立体的なCGレンダリング調
+medium	papercraft	ペーパークラフト	切り紙を重ねたような立体感
+technique	flat color	フラット塗り	影を最小限にしたベタ塗り。すっきりポップ
+technique	cel shading	アニメ塗り	影がくっきり分かれたセル画風
+technique	impasto	インパスト	絵の具を盛った凹凸感のある厚塗り
+technique	lineless	線なし	主線を描かず色面だけで形を作る、やわらかい印象
+technique	thick lineart	太い主線	輪郭が太く、キャッチーでステッカー的
+technique	sketch	スケッチ	描きかけのラフさ、勢いのある線
+technique	monochrome	モノクロ	白黒のみ。漫画原稿やシックな雰囲気に
+technique	greyscale	グレースケール	グレーの階調で描く落ち着いた画面
+technique	limited palette	限定色	少ない色数で統一感のある画面
+technique	spot color	スポットカラー	モノクロに一色だけ差し色
+technique	halftone	網点	印刷物っぽいドット模様。コミック風
+technique	screentones	スクリーントーン	漫画原稿のトーン貼り質感
+technique	chromatic aberration	色収差	縁に色ズレ。エモい・サイバーな演出
+technique	film grain	フィルムグレイン	粒状ノイズで写真・映画っぽさ
+technique	gradient	グラデーション	色の移ろいを強調した画面
+technique	high contrast	ハイコントラスト	明暗差を強くしたドラマチックな画面
+technique	blending	ブレンド塗り	境界をなじませた柔らかい厚塗り寄りの塗り
+technique	unfinished	未完成風	一部が塗りかけ。アート感・抜け感が出る
+genre	anime coloring	アニメ調	TVアニメのスクショ風の塗り
+genre	anime screencap	アニメスクショ	アニメ本編の1カット風の画面
+genre	game cg	ゲームCG	ノベルゲームのイベントCG風の華やかさ
+genre	official art	公式絵風	公式イラストっぽい整った仕上がり
+genre	chibi	ちび	デフォルメ頭身。かわいさ全振り
+genre	realistic	リアル寄り	写実寄りの描写
+genre	photorealistic	フォトリアル	写真に近い質感
+genre	semi-realistic	セミリアル	アニメ顔＋リアルな質感の中間
+genre	manga	漫画風	コマ漫画のような描写
+genre	comic	アメコミ	アメリカンコミック風の太線と陰影
+genre	toon (style)	トゥーン	カートゥーン風のデフォルメ
+genre	ukiyo-e	浮世絵	木版画の輪郭と平面的な色面
+genre	art nouveau	アール・ヌーヴォー	曲線的な装飾フレームと優雅な構図
+genre	art deco	アール・デコ	幾何学的で華やかな1920年代風
+genre	pop art	ポップアート	原色とドットのコミック的表現
+genre	impressionism	印象派	光の筆触を重ねた絵画風
+genre	surreal	シュール	夢のような非現実的な構成
+genre	cyberpunk	サイバーパンク	ネオンと近未来都市の色調
+genre	steampunk	スチームパンク	真鍮と歯車のヴィクトリア朝SF
+genre	vaporwave	ヴェイパーウェイヴ	パステル紫×ピンク、90年代CGのノスタルジー
+genre	kawaii	ゆめかわ/かわいい	パステル・キラキラで甘い雰囲気
+genre	poster (object)	ポスター風	文字や枠のあるポスターデザイン調
+genre	stained glass	ステンドグラス	黒い枠線と透過色のステンドグラス調
+genre	fantasy	ファンタジー	幻想的な世界観の画面
+genre	dark	ダーク	暗く重いトーン
+era	retro artstyle	レトロ	昔のアニメ・イラストの懐かしい画風
+era	1980s (style)	80年代風	セル画・バブル期アニメの画風と色
+era	1990s (style)	90年代風	90年代アニメのシャープな目と色調
+era	2000s (style)	2000年代風	00年代ギャルゲ・アニメの塗りと顔立ち
+era	2010s (style)	2010年代風	10年代の萌えアニメ的な整った絵柄
+era	2020s (style)	2020年代風	近年のSNSイラスト的な高彩度・繊細な塗り
+era	faux traditional media	デジタルでアナログ風	デジタルにアナログの紙質感を重ねる
+era	oekaki	お絵かき掲示板風	ゼロ年代のペイントツールっぽい素朴さ
+era	ps1 graphics	PS1風	初代プレステの粗いポリゴン感
+lighting	backlighting	逆光	輪郭が光る、エモい雰囲気
+lighting	rim lighting	リムライト	縁取り光で立体感を強調
+lighting	dramatic lighting	ドラマチック照明	強い陰影の劇的な光
+lighting	soft lighting	ソフトライティング	柔らかく包む光
+lighting	sunlight	陽光	自然光の明るさ・爽やかさ
+lighting	dappled sunlight	木漏れ日	葉の影がまだらに落ちる光
+lighting	neon lights	ネオン	夜の街のカラフルな光
+lighting	volumetric lighting	ボリュームライト	光の筋が見える空気感
+lighting	bloom	ブルーム	光がにじむ幻想的な発光
+lighting	glowing	発光	キャラや物が光るファンタジー感
+lighting	light particles	光の粒	キラキラ舞う光の粒子
+lighting	sepia	セピア	古写真のような茶色い色調
+lighting	pastel colors	パステルカラー	淡く甘い色合い
+lighting	vivid colors	ビビッドカラー	高彩度で鮮やか
+lighting	muted color	くすみカラー	彩度を落とした落ち着いた大人っぽい色
+lighting	colorful	カラフル	多色でにぎやか
+lighting	dark theme	ダークテーマ	暗い背景に浮かぶ画面
