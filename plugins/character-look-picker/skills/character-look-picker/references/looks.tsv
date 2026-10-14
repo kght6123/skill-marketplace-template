@@ -1,0 +1,84 @@
+category	tag	ja_name	description
+age	mature female	大人の女性	落ち着いた大人の雰囲気をはっきり出す
+age	adult	成人	年齢感を成人に固定する基本タグ
+age	office lady	OL風	社会人らしい大人っぽさ
+age	young woman	若い女性	20代前半くらいの爽やかさ
+age	milf	大人の色気	30代以上の包容力ある雰囲気
+hair	pink hair	ピンク髪	甘くキャッチー
+hair	black hair	黒髪	清楚・知的
+hair	blonde hair	金髪	華やか・明るい
+hair	brown hair	茶髪	親しみやすい自然さ
+hair	silver hair	銀髪	神秘的・クール
+hair	white hair	白髪	儚さ・透明感
+hair	red hair	赤髪	情熱的・元気
+hair	blue hair	青髪	クール・ファンタジー
+hair	purple hair	紫髪	妖艶・ミステリアス
+hair	green hair	緑髪	ナチュラル・個性派
+hair	gradient hair	グラデ髪	毛先で色が変わるおしゃれ感
+hair	streaked hair	メッシュ	一部だけ色を差す
+hair	two-tone hair	ツートン	左右や内外で色分け
+hairstyle	long hair	ロング	女性らしさの王道
+hairstyle	very long hair	超ロング	ファンタジー感・存在感
+hairstyle	short hair	ショート	快活・ボーイッシュ
+hairstyle	bob cut	ボブ	かわいく上品
+hairstyle	medium hair	ミディアム	ナチュラルで万能
+hairstyle	ponytail	ポニーテール	元気・スポーティ
+hairstyle	twintails	ツインテール	あざと可愛い定番
+hairstyle	side ponytail	サイドテール	少し遊び心
+hairstyle	hair bun	お団子	すっきり上品
+hairstyle	braid	三つ編み	素朴・ガーリー
+hairstyle	wavy hair	ウェーブ	ふんわり大人っぽい
+hairstyle	hime cut	姫カット	和風・お嬢様
+hairstyle	hair over one eye	片目隠れ	ミステリアス
+hairstyle	ahoge	アホ毛	ゆるさ・キャラ感
+hairstyle	blunt bangs	ぱっつん前髪	はっきりした印象
+hairstyle	swept bangs	流し前髪	大人っぽい抜け感
+eyes	heart-shaped pupils	ハート目	甘さ全開の記号的表現
+eyes	red eyes	赤目	強い印象
+eyes	blue eyes	青目	爽やか・透明感
+eyes	green eyes	緑目	知的・ナチュラル
+eyes	purple eyes	紫目	妖艶・神秘
+eyes	golden eyes	金目	特別感
+eyes	pink eyes	ピンク目	甘い
+eyes	heterochromia	オッドアイ	左右で色違い
+eyes	tsurime	つり目	勝ち気・クール
+eyes	tareme	たれ目	おっとり・やさしい
+eyes	half-closed eyes	ジト目	気だるげ・色っぽい
+eyes	long eyelashes	長いまつ毛	華やかな目元
+face	smile	微笑み	やわらかい好印象
+face	grin	にっこり	元気・いたずらっぽい
+face	smug	ドヤ顔	自信・小悪魔
+face	blush	赤面	照れ・甘さ
+face	light smile	うっすら笑み	大人の余裕
+face	expressionless	無表情	クール・ミステリアス
+face	parted lips	半開きの口	色気・ぼんやり
+face	mole under eye	泣きぼくろ	大人っぽい色気
+face	freckles	そばかす	素朴・親しみ
+face	makeup	メイク	大人の女性らしさ
+face	lipstick	口紅	華やか・色っぽい
+body	slender	スレンダー	すらりとした細身
+body	curvy	グラマー	メリハリのある体型
+body	tall female	高身長	モデル体型・かっこよさ
+body	medium breasts	バスト普通	バランスのよい体型
+body	large breasts	バスト大きめ	グラマラスな印象
+body	small breasts	バスト控えめ	すっきりした印象
+body	wide hips	ヒップ強調	女性らしい曲線
+body	thick thighs	むっちり太もも	肉感的な健康美
+body	toned	引き締まった体	アスリート的な健康美
+body	narrow waist	くびれ	ウエストの細さを強調
+body	long legs	脚長	スタイルのよさ
+skin	pale skin	色白	透明感・儚さ
+skin	fair skin	明るい肌	自然な明るさ
+skin	tan	日焼け	健康的・夏らしさ
+skin	dark skin	褐色肌	エキゾチック・快活
+skin	shiny skin	ツヤ肌	みずみずしさ
+accent	glasses	メガネ	知的・ギャップ
+accent	earrings	イヤリング	大人のおしゃれ
+accent	choker	チョーカー	首元のアクセント
+accent	hair ornament	髪飾り	かわいい差し色
+accent	hair ribbon	リボン	ガーリー
+accent	nail polish	ネイル	指先のおしゃれ
+accent	animal ears	ケモ耳	ファンタジー・あざとさ
+accent	horns	角	小悪魔・ファンタジー
+accent	pointy ears	エルフ耳	神秘的
+accent	beauty mark	ほくろ	色気のポイント

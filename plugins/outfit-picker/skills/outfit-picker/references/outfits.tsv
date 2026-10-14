@@ -1,0 +1,104 @@
+category	tag	ja_name	description
+theme	casual	カジュアル	普段着のリラックス感
+theme	streetwear	ストリート	オーバーサイズ・都会的
+theme	formal	フォーマル	きちんとした場の装い
+theme	business suit	ビジネススーツ	できる大人の女性
+theme	gothic lolita	ゴスロリ	黒とフリルの退廃的な甘さ
+theme	sweet lolita	甘ロリ	パステルとフリルの夢かわ
+theme	idol clothes	アイドル衣装	ステージ映えする華やかさ
+theme	maid	メイド服	クラシックな給仕服
+theme	nurse	ナース服	清潔感のある白衣装
+theme	miko	巫女服	紅白の和の神聖さ
+theme	kimono	着物	和の上品さ
+theme	yukata	浴衣	夏祭りの涼しげな和装
+theme	china dress	チャイナドレス	スリットと光沢の艶やかさ
+theme	witch	魔女	とんがり帽子とローブのファンタジー
+theme	armor	鎧	戦う女騎士
+theme	military uniform	軍服	凛々しく格好いい
+theme	sportswear	スポーツウェア	アクティブで健康的
+theme	pajamas	パジャマ	ゆるい部屋着
+theme	techwear	テックウェア	ベルトとナイロンの近未来系
+theme	cyberpunk	サイバーパンク	ネオンと機械パーツ
+theme	fantasy	ファンタジー衣装	冒険者・王女風
+theme	apron	エプロン	家庭的・カフェ店員風
+top	shirt	シャツ	清潔感の基本
+top	blouse	ブラウス	やわらかく女性らしい
+top	t-shirt	Tシャツ	ラフで親しみやすい
+top	sweater	セーター	あたたかく柔らかい
+top	turtleneck	タートルネック	大人っぽく知的
+top	off-shoulder shirt	オフショルダー	肩を見せる軽やかさ
+top	hoodie	パーカー	ゆるくカジュアル
+top	crop top	クロップトップ	丈短めのスポーティさ
+top	camisole	キャミソール	夏らしい軽さ
+top	cardigan	カーディガン	やさしい羽織り
+top	vest	ベスト	きちんと感
+top	sailor collar	セーラーカラー	マリン風の襟
+bottom	skirt	スカート	基本のスカート
+bottom	pleated skirt	プリーツスカート	動きのあるきちんと感
+bottom	long skirt	ロングスカート	上品で落ち着いた
+bottom	miniskirt	ミニスカート	快活で脚長
+bottom	pencil skirt	タイトスカート	大人のオフィス感
+bottom	pants	パンツ	すっきり実用的
+bottom	jeans	ジーンズ	カジュアルの定番
+bottom	shorts	ショートパンツ	元気・夏らしい
+bottom	wide-leg pants	ワイドパンツ	ゆったりおしゃれ
+bottom	overalls	オーバーオール	ゆるかわ
+onepiece	dress	ワンピース	一枚で完成する女性らしさ
+onepiece	sundress	サマードレス	夏の爽やかさ
+onepiece	sweater dress	ニットワンピ	ふんわり冬らしい
+onepiece	evening gown	イブニングドレス	パーティの華やかさ
+onepiece	wedding dress	ウェディングドレス	特別な日の純白
+onepiece	frilled dress	フリルワンピ	甘くガーリー
+onepiece	jumpsuit	ジャンプスーツ	かっこいい一体型
+onepiece	one-piece swimsuit	ワンピース水着	夏・プールの爽やかさ
+outer	jacket	ジャケット	きちんと羽織る
+outer	leather jacket	レザージャケット	クールで強め
+outer	coat	コート	冬の大人っぽさ
+outer	trench coat	トレンチコート	知的でクラシック
+outer	cape	ケープ	ファンタジー・上品
+outer	cloak	マント	旅人・魔法使い
+outer	open jacket	前開きジャケット	こなれた抜け感
+outer	haori	羽織	和の羽織りもの
+outer	labcoat	白衣	研究者・知的
+outer	oversized jacket	オーバーサイズ上着	ゆるく可愛い
+legwear	pantyhose	タイツ/パンスト	大人の脚元
+legwear	black pantyhose	黒タイツ	定番の引き締め
+legwear	thighhighs	ニーハイ	絶対領域
+legwear	kneehighs	ハイソックス	すっきり上品
+legwear	socks	靴下	ラフで日常的
+legwear	fishnets	網タイツ	パンク・小悪魔
+legwear	leg warmers	レッグウォーマー	ゆるかわ・ダンサー風
+legwear	bare legs	素足	夏らしく軽い
+shoes	sneakers	スニーカー	カジュアル・活発
+shoes	high heels	ハイヒール	大人の色気と脚長効果
+shoes	boots	ブーツ	かっこよさ
+shoes	thigh boots	サイハイブーツ	強めでスタイリッシュ
+shoes	loafers	ローファー	きちんと上品
+shoes	sandals	サンダル	夏・リゾート
+shoes	mary janes	メリージェーン	クラシックな可愛さ
+shoes	geta	下駄	和装の足元
+shoes	barefoot	裸足	自然体・室内
+item	hat	帽子	コーデのアクセント
+item	sun hat	麦わら帽子	夏の爽やかさ
+item	beret	ベレー帽	アーティスティック
+item	witch hat	魔女帽子	ファンタジー
+item	headphones	ヘッドホン	サブカル・音楽好き
+item	scarf	マフラー	冬のあたたかさ
+item	gloves	手袋	上品・フォーマル
+item	handbag	ハンドバッグ	大人のお出かけ
+item	backpack	リュック	カジュアル・旅
+item	umbrella	傘	雨の日・情緒
+item	belt	ベルト	ウエストの引き締め
+item	necktie	ネクタイ	きりっと
+item	bow	リボン	甘さを足す
+color	white clothes	白コーデ	清楚・透明感
+color	black clothes	黒コーデ	クール・シック
+color	pink clothes	ピンクコーデ	甘く可愛い
+color	pastel clothes	パステルコーデ	淡く優しい
+color	red clothes	赤コーデ	情熱・目立つ
+color	navy clothes	ネイビーコーデ	知的・落ち着き
+color	beige clothes	ベージュコーデ	ナチュラル大人
+color	monochrome clothes	モノトーン	白黒で洗練
+color	plaid	チェック柄	トラッド
+color	striped clothes	ストライプ	爽やか
+color	floral print	花柄	華やか・春らしい

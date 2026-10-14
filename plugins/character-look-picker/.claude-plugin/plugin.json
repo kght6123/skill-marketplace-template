@@ -1,0 +1,9 @@
+{
+  "name": "character-look-picker",
+  "description": "AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）で描く成人女性キャラの外見（髪色・髪型・目・表情・体型・肌・アクセント）を、Danbooruタグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル",
+  "version": "1.0.0",
+  "author": {
+    "name": "kght6123",
+    "url": "https://github.com/kght6123"
+  }
+}
