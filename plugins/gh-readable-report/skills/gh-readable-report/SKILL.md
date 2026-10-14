@@ -15,7 +15,7 @@ Karpathy氏の4手段（文章→図/画像→Webページ→動画）を、GitH
 | 文章 | "80% of the way to ASD-STE100" の日本語 | 本文 |
 | 図 | Mermaid（伝えたいことに合わせて種類を選ぶ、数は無制限） | 本文（GitHubが描画） |
 | 画像 | Mermaidで表しにくいものはSVG/PNG | `--attach` |
-| Webページ | 画面のスクショ / GIF | `--attach` |
+| Webページ・画面 | 変更前後のスクショ＋操作の画面録画（mp4） | `--attach` |
 | 動画 | Manimの3Blue1Brown風mp4（字幕＋任意でナレーション） | `--attach` |
 
 HTMLをGitHub Pagesで公開しない。Teamプランではprivateリポジトリでも
@@ -40,7 +40,10 @@ curl -s localhost:50021/version   # VOICEVOXエンジン（ナレーションを
 3. **本文を書く**：事実メモを "80% of the way to ASD-STE100" の日本語で書き直す（`references/ste-japanese.md`）。前後で事実の件数を見比べ、消えた事実は戻す。
 4. **図を作る**：手順2で決めた「伝えたいこと」ごとに、合う種類の図を1枚ずつ作る。枚数の上限は設けない。各図は1メッセージ・8要素程度に保ち、超えるなら分割する。`mmdc` で描画を検証する。Mermaidで表しにくいもの（画面配置、数値の推移、空間的な構成）は画像にする。
 5. **動画を作る**：`references/manim-3b1b.md` に従い、台本とManimスクリプトを書き `scripts/render_manim.sh` でmp4にする。ナレーションを付けるときは `scripts/narrate.py` で合成する。100MB未満にする。
-6. **画面の変更があればスクショ/GIF**：UIや生成HTMLがあれば `scripts/capture.py` で撮る。
+6. **画面の変更があれば、スクショと画面録画を必ず添付する**：差分にUI（テンプレート、CSS、フロントエンドのコンポーネント、生成HTMLなど）が含まれるか、Issueが画面の不具合や要望なら必須。`references/screen-capture.md` に従う。
+   - スクショ：変更した画面ごとに **変更前（ベースブランチ）と変更後** を撮る。
+   - 画面録画：操作の流れ（クリック、入力、遷移、アニメーション）が変わるなら、操作をmp4で録画する。
+   - Issueでは、再現中の画面（バグ）や現状の画面（要望）を撮る。
 7. **作成**：本文確定後に一度だけアップロードする（失敗時の重複添付を避けるため）。
 
 ```bash
@@ -48,6 +51,8 @@ gh pr create --title "<件名>" --body-file body.md \
   --attach ./out/explain.mp4 --attach "./out/screen.png#変更後の一覧画面"
 # Issueなら gh issue create、既存なら gh pr edit <番号> / gh issue edit <番号>
 ```
+
+`#説明`（alt text）は画像だけに付ける。動画（mp4）に付けると `cannot set alt text on video` で失敗する。動画の説明は本文に書く。
 
 `--attach` はURLを本文末尾に追記する。一部の添付だけ失敗しても、Issue/PR自体は作られて終了コードが0以外になることがある。URLが出力されたら作成済みとして扱い、`edit --attach` で不足分だけ足す。作り直さない。
 
@@ -69,7 +74,10 @@ gh pr create --title "<件名>" --body-file body.md \
 ## 影響と注意
 - （無ければ「なし」）
 
-## 解説動画・画面
+## 画面（変更前 / 変更後）
+（スクショ・画面録画。画像は --attach の `#説明` で何の画面か書く。動画は `#説明` を付けられないので、この節に「変更後：登録操作の録画」のように文で書く）
+
+## 解説動画
 （--attach で末尾に追加される）
 ```
 
