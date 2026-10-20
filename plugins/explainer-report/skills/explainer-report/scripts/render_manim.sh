@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 使い方: render_manim.sh <script.py> <SceneClass> [出力先=out/explain.mp4] [--voice narration.json]
-# 720p30でレンダリングし、100MBを超えたら再圧縮する（--attachの有料プラン上限）。
+# 720p30でレンダリングし、100MBを超えたら再圧縮する（gh --attach の有料プラン上限に合わせる）。
 # --voice を付けると VOICEVOX（既定：ずんだもん）のナレーションを合成する。付けなければ無音（字幕のみ）。
 # 環境変数 VOICE=off で --voice を無効にできる。話者は VOICEVOX_SPEAKER（既定 3 = ずんだもん ノーマル）。
 set -euo pipefail

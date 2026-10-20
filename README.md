@@ -13,7 +13,7 @@ Claude Code / Copilot CLI / Codex CLI / OpenCode に対応した Agent Skills �
 | [wan22-prompt-craft](./plugins/wan22-prompt-craft/) | Wan2.2（Alibaba製オープンソース動画/画像生成モデル）向けのプロンプトを新規作成・修正・改善するスキル |
 | [sdxl-original-character-prompt-craft](./plugins/sdxl-original-character-prompt-craft/) | 特定のオリジナルキャラクター向けにSDXL用プロンプト（ポジティブ＋ネガティブ）を生成・改良するスキル |
 | [ai-dev-orchestration](./plugins/ai-dev-orchestration/) | 複数プロジェクトのAI開発を、人間の処理量を上限にして回すオーケストレーションのスキル群（orch-core / orch-run / orch-issue-memo / orch-implement / orch-review-triage / orch-memo-check） |
-| [gh-readable-report](./plugins/gh-readable-report/) | Claude Codeが作成・更新するGitHubのIssueやPull Requestを、人間が短時間で理解できる形にするスキル |
+| [explainer-report](./plugins/explainer-report/) | AIが作った成果を、文章・Mermaid図・解説動画（任意でずんだもんのナレーション）・画面のスクショで、人間が短時間で理解できる解説レポートにするスキル。出力先は gh（GitHub の Issue/PR）と Markdown |
 | [art-style-picker](./plugins/art-style-picker/) | AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）の画風を、Danbooruの画風タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル |
 | [composition-picker](./plugins/composition-picker/) | AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）の構図を、Danbooruの構図・ポーズ系タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル |
 | [character-look-picker](./plugins/character-look-picker/) | AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）で描く成人女性キャラの外見（髪色・髪型・目・表情・体型・肌・アクセント）を、Danbooruタグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル |

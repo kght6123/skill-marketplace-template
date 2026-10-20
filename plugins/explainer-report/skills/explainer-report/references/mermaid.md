@@ -14,7 +14,7 @@
 | 変更前と後の違い | `flowchart` の `subgraph` を左右に並べる（または前後2枚） |
 | ブランチ・リリースの流れ | `gitGraph` |
 | 作業の段取り・期限 | `gantt` / `timeline` |
-| 画面配置、数値の推移、分布 | Mermaidを使わず画像（SVG/matplotlibのPNG）を `--attach` |
+| 画面配置、数値の推移、分布 | Mermaidを使わず画像（SVG/matplotlibのPNG）を添付（出力先の方法で） |
 
 ## 2. Issue/PRの種類 → 作る図の候補
 
