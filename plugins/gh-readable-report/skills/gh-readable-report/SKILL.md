@@ -27,7 +27,7 @@ Pagesサイトが誰でも見られるURLになり、社内情報が漏れるた
 gh --version            # 2.99.0 以上（--attach対応）
 gh repo view --json viewerPermission -q .viewerPermission  # WRITE/MAINTAIN/ADMIN
 python -c "import manim" && which ffmpeg mmdc
-curl -s localhost:50021/version   # VOICEVOXエンジン（ナレーションを付ける場合のみ）
+scripts/voicevox.sh status       # VOICEVOXエンジン（ナレーションを付ける場合のみ。start で Apple container / docker 上に起動）
 ```
 
 足りないものがあれば、ユーザーに伝えて、できる範囲で進める。添付は後から `gh issue/pr edit --attach` で足せる。
@@ -39,7 +39,7 @@ curl -s localhost:50021/version   # VOICEVOXエンジン（ナレーションを
 2. **伝えたいことを決める**：Issue/PRの種類ごとに「読者が理解すべきこと」を書き出す。これが図の種類と数を決める。`references/mermaid.md` の対応表を見る。
 3. **本文を書く**：事実メモを "80% of the way to ASD-STE100" の日本語で書き直す（`references/ste-japanese.md`）。前後で事実の件数を見比べ、消えた事実は戻す。
 4. **図を作る**：手順2で決めた「伝えたいこと」ごとに、合う種類の図を1枚ずつ作る。枚数の上限は設けない。各図は1メッセージ・8要素程度に保ち、超えるなら分割する。`mmdc` で描画を検証する。Mermaidで表しにくいもの（画面配置、数値の推移、空間的な構成）は画像にする。
-5. **動画を作る**：`references/manim-3b1b.md` に従い、台本とManimスクリプトを書き `scripts/render_manim.sh` でmp4にする。ナレーションを付けるときは `scripts/narrate.py` で合成する。100MB未満にする。
+5. **動画を作る**：`references/manim-3b1b.md` に従い、台本とManimスクリプトを書き `scripts/render_manim.sh` でmp4にする。音声はオプション。ナレーションを付けるときは `--voice narration.json` を渡す（既定はずんだもん。付けなければ字幕のみ）。100MB未満にする。
 6. **画面の変更があれば、スクショと画面録画を必ず添付する**：差分にUI（テンプレート、CSS、フロントエンドのコンポーネント、生成HTMLなど）が含まれるか、Issueが画面の不具合や要望なら必須。`references/screen-capture.md` に従う。
    - スクショ：変更した画面ごとに **変更前（ベースブランチ）と変更後** を撮る。
    - 画面録画：操作の流れ（クリック、入力、遷移、アニメーション）が変わるなら、操作をmp4で録画する。

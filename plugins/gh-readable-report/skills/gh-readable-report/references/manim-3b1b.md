@@ -50,8 +50,18 @@ class Explain(Scene):
 
 レンダリングは `scripts/render_manim.sh explain.py Explain` を使う。
 
-## ナレーションを付ける場合
-1. 台本を `narration.json` に書く：`[{"text": "登録された情報は、まず承認待ちになる。"}, ...]`（場面順、字幕と同じ文）。
-2. 場面の長さを読み上げに合わせる：先に `python scripts/narrate.py durations narration.json` で各文の秒数を出し、Manimの `self.wait()` をその秒数に合わせる。
-3. レンダリング後に合成：`python scripts/narrate.py mux narration.json out/explain.mp4 out/explain_voice.mp4`
-VOICEVOXエンジンが動いていなければ（`localhost:50021`）、ナレーション無しで進め、その旨をユーザーに伝える。
+## ナレーションを付ける場合（オプション）
+音声は既定でオフ。`--voice` を付けたときだけ、VOICEVOX のずんだもん（話者ID 3）で読み上げる。
+
+1. 台本を `narration.json` に書く。字幕と同じ内容の文を、その字幕を出す時刻（秒）と一緒に書く：
+   `[{"text": "このPRは5つのスキルを足すのだ。", "at": 0.5}, ...]`
+2. VOICEVOX を起動する：`scripts/voicevox.sh start`。Apple container（`container` コマンド）があれば使い、無ければ docker を使う。イメージは `voicevox/voicevox_engine:cpu-latest`（arm64 対応）。初回はイメージの取得に1〜2分かかる。
+3. 各文の長さを確かめる：`python3 scripts/narrate.py durations narration.json`。次の文の `at` より長い文があれば、Manim の `self.wait()` を延ばす。
+4. レンダリングと合成を一度に行う：`scripts/render_manim.sh explain.py Explain out/explain.mp4 --voice narration.json`
+5. 終わったら止める：`scripts/voicevox.sh stop`
+
+- 音声をオフにする：`--voice` を付けない。または `VOICE=off` を付けて実行する。
+- 話者を変える：`VOICEVOX_SPEAKER=1`（ずんだもん あまあま）など。ID は `curl -s localhost:50021/speakers` で調べる。
+- ずんだもんで読むときは、台本の語尾を「〜のだ」「〜なのだ」にしてよい。字幕は本文と同じ STE 風の文のままにする。
+- 本文の「解説動画」の節に `VOICEVOX:ずんだもん` とクレジットを書く（VOICEVOX とキャラクターの利用規約による）。
+- VOICEVOX を起動できなければ、`render_manim.sh` は字幕のみの動画を出力する。その旨をユーザーに伝える。
