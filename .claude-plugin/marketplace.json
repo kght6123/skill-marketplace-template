@@ -50,10 +50,10 @@
       "description": "複数プロジェクトのAI開発を、人間の処理量を上限にして回すオーケストレーションのスキル群"
     },
     {
-      "name": "gh-readable-report",
-      "source": "./plugins/gh-readable-report",
+      "name": "explainer-report",
+      "source": "./plugins/explainer-report",
       "category": "development",
-      "description": "Claude Codeが作成・更新するGitHubのIssueやPull Requestを、人間が短時間で理解できる形にするスキル"
+      "description": "AIが作った成果を、文章・Mermaid図・解説動画（任意でずんだもんのナレーション）・画面のスクショで、人間が短時間で理解できる解説レポートにするスキル。出力先は gh（GitHub の Issue/PR）と Markdown"
     },
     {
       "name": "art-style-picker",
