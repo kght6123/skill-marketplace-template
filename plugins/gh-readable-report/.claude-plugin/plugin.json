@@ -1,9 +1,0 @@
-{
-  "name": "gh-readable-report",
-  "description": "Claude Codeが作成・更新するGitHubのIssueやPull Requestを、人間が短時間で理解できる形にするスキル",
-  "version": "1.0.0",
-  "author": {
-    "name": "kght6123",
-    "url": "https://github.com/kght6123"
-  }
-}
