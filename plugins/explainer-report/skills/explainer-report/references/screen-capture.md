@@ -44,6 +44,26 @@ steps.json の例（上から順に実行。`wait` はミリ秒）：
 ```
 録画は1本30秒程度まで。長い操作は場面ごとに分ける。
 
+## 字幕とナレーションを付ける（画面録画）
+操作の意味が画面だけで伝わりにくいときは、ステップに `say` を書く。その操作の時刻に字幕が焼き込まれる。
+`--voice` を付けると、同じ時刻にずんだもん（VOICEVOX）の読み上げも入る。付けなければ字幕だけ。
+```json
+[
+  {"say": "新規作成ボタンを押すのだ。", "caption": "新規作成ボタンを押す。", "click": "text=新規作成"},
+  {"say": "商品名を入れるのだ。", "fill": ["#title", "テスト商品"]},
+  {"say": "保存すると、一覧に戻るのだ。", "click": "button[type=submit]", "wait": 1000}
+]
+```
+```bash
+python scripts/capture.py http://localhost:3000/items out/after_flow.mp4 --video --steps steps.json --voice
+```
+- `say` は読み上げる文。`caption` があれば字幕はそちらにする（字幕は STE 風、読み上げは「〜のだ」でよい）。
+- 読み上げの長さは録画の前に測り、読み終わるまで次の操作を待つ。`wait` は読み上げより長く止めたいときだけ書く。
+- 1ステップ1文にする。字幕が長いと画面からはみ出るので、1文25文字程度までにする。
+- `out/after_flow.srt`（字幕）と `out/after_flow.narration.json`（台本と時刻）も出る。YouTube に上げるときに使う（`references/youtube.md`）。
+- VOICEVOX を起動できなければ、字幕だけの動画になる。音声を止めるには `VOICE=off`、話者は `VOICEVOX_SPEAKER` で変える。
+- ナレーションを付けたら、本文に `VOICEVOX:ずんだもん` とクレジットを書く。
+
 ## 置き方
 ファイル名は `before_*` / `after_*` に揃え、レポートの「画面」節で前後が並ぶようにする。
 画像には「変更前/後：画面名」の説明を付ける。動画の説明は「画面」節に文で書く。

@@ -1,6 +1,6 @@
 ---
 name: explainer-report
-description: AIが作った成果（コード変更、調査結果、設計案、障害報告など）を、人間が短時間で理解できる解説レポートにするスキル。Karpathy氏の「LLM出力を理解しやすくする4手段」に沿い、本文を "80% of the way to ASD-STE100" の日本語で書き、伝えたいことに合わせて選んだMermaid図や画像を必要なだけ入れ、Manimで作った3Blue1Brown風の解説動画（字幕＋任意でずんだもんのナレーション）と画面のスクリーンショット/録画を付ける。出力先は GitHub の Issue/PR（gh）と Markdown ファイル。ユーザーが「Issueを作って」「PRを作って」「PR本文を書いて」「Issueを起票して」「gh pr create」「gh issue create」「PRの説明を分かりやすく」「解説して」「レポートにまとめて」「説明資料を作って」「図や動画で説明して」「解説動画を作って」などと言ったら必ず使う。Orchestrator等のエージェントがIssue/PRや報告書を作るとき、既存の本文を書き直すときにも積極的に使う。
+description: AIが作った成果（コード変更、調査結果、設計案、障害報告など）を、人間が短時間で理解できる解説レポートにするスキル。Karpathy氏の「LLM出力を理解しやすくする4手段」に沿い、本文を "80% of the way to ASD-STE100" の日本語で書き、伝えたいことに合わせて選んだMermaid図や画像を必要なだけ入れ、Manimで作った3Blue1Brown風の解説動画（字幕＋任意でずんだもんのナレーション）と画面のスクリーンショット/録画（字幕＋任意でずんだもんのナレーション）を付ける。出力先は GitHub の Issue/PR（gh）と Markdown ファイル。動画は任意で YouTube Data API でアップロードし、タイトル・概要・タグ・チャプター・字幕・サムネイルをAIが作る。ユーザーが「Issueを作って」「PRを作って」「PR本文を書いて」「Issueを起票して」「gh pr create」「gh issue create」「PRの説明を分かりやすく」「解説して」「レポートにまとめて」「説明資料を作って」「図や動画で説明して」「解説動画を作って」「画面録画に字幕を付けて」「動画をYouTubeに上げて」などと言ったら必ず使う。Orchestrator等のエージェントがIssue/PRや報告書を作るとき、既存の本文を書き直すときにも積極的に使う。
 ---
 
 # explainer-report
@@ -15,7 +15,7 @@ Karpathy氏の4手段（文章→図/画像→Webページ→動画）を、毎�
 | 文章 | "80% of the way to ASD-STE100" の日本語 | `references/ste-japanese.md` |
 | 図 | Mermaid（伝えたいことに合わせて種類を選ぶ、数は無制限） | `references/mermaid.md` |
 | 画像 | Mermaidで表しにくいものはSVG/PNG | `references/mermaid.md` |
-| Webページ・画面 | 変更前後のスクショ＋操作の画面録画（mp4） | `references/screen-capture.md` |
+| Webページ・画面 | 変更前後のスクショ＋操作の画面録画（mp4。字幕＋任意でナレーション） | `references/screen-capture.md` |
 | 動画 | Manimの3Blue1Brown風mp4（字幕＋任意でナレーション） | `references/manim-3b1b.md` |
 
 作り方は出力先によらず同じ。最後の「出す」手順だけが出力先で変わる。
@@ -29,11 +29,14 @@ Karpathy氏の4手段（文章→図/画像→Webページ→動画）を、毎�
 
 ユーザーが出力先を言わなければ、Issue/PR の話なら gh、それ以外は markdown にする。
 
+どちらの出力先でも、ユーザーが望めば動画を YouTube に上げて URL を貼れる（`references/youtube.md`）。
+
 ## 前提チェック（最初に1回）
 
 ```bash
 python -c "import manim" && which ffmpeg mmdc
 scripts/voicevox.sh status   # ナレーションを付ける場合のみ。start で Apple container / docker 上に起動
+python -c "import googleapiclient, google_auth_oauthlib"  # YouTube に上げる場合のみ
 ```
 
 出力先ごとの確認は `references/targets/` の各ファイルに書いてある。
@@ -49,9 +52,10 @@ scripts/voicevox.sh status   # ナレーションを付ける場合のみ。star
 5. **動画を作る**：`references/manim-3b1b.md` に従い、台本とManimスクリプトを書き `scripts/render_manim.sh` でmp4にする。音声はオプション。ナレーションを付けるときは `--voice narration.json` を渡す（既定はずんだもん。付けなければ字幕のみ）。100MB未満にする。
 6. **画面の変更があれば、スクショと画面録画を必ず付ける**：差分にUI（テンプレート、CSS、フロントエンドのコンポーネント、生成HTMLなど）が含まれるか、報告の対象が画面の不具合や要望なら必須。`references/screen-capture.md` に従う。
    - スクショ：変更した画面ごとに **変更前と変更後** を撮る。
-   - 画面録画：操作の流れ（クリック、入力、遷移、アニメーション）が変わるなら、操作をmp4で録画する。
+   - 画面録画：操作の流れ（クリック、入力、遷移、アニメーション）が変わるなら、操作をmp4で録画する。操作の意味を補うなら、ステップに `say` を書いて字幕を付ける（`--voice` でずんだもんの読み上げも付く）。
    - 不具合の報告では、再現中の画面を撮る。要望では、現状の画面を撮る。
-7. **出す**：出力先のファイル（`references/targets/gh.md` か `references/targets/markdown.md`）に従う。
+7. **YouTube に上げる（任意）**：ユーザーが望んだときだけ。`references/youtube.md` に従い、タイトル・概要などのメタデータを AI が作り、`--dry-run` で検査し、公開範囲と内容をユーザーに確認してから上げる。
+8. **出す**：出力先のファイル（`references/targets/gh.md` か `references/targets/markdown.md`）に従う。
 
 ## 本文テンプレート
 
@@ -72,10 +76,10 @@ scripts/voicevox.sh status   # ナレーションを付ける場合のみ。star
 - （無ければ「なし」）
 
 ## 画面（変更前 / 変更後）
-（スクショ・画面録画。各画像に何の画面かを書く。動画は「変更後：登録操作の録画」のように文で書く）
+（スクショ・画面録画。各画像に何の画面かを書く。動画は「変更後：登録操作の録画」のように文で書く。YouTube に上げたら URL も書く）
 
 ## 解説動画
-（動画と、ナレーションを付けたらクレジット「音声：VOICEVOX:ずんだもん」）
+（動画か YouTube の URL と、ナレーションを付けたらクレジット「音声：VOICEVOX:ずんだもん」）
 ```
 
 レポートの種類に合わせて節を置き換える。
