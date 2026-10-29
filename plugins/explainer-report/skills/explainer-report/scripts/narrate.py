@@ -8,7 +8,7 @@ narration.json: [{"text": "...", "at": 1.5, "caption": "...", "chapter": "..."},
   "at"（秒）があればその時刻から読み上げる（字幕・操作の時刻に合わせる）。
   無ければ前の文の直後（0.4秒あけて）に続ける。
   "caption" があれば字幕はそれを使う（読み上げは "text"）。無ければ "text" を字幕にする。
-  "chapter" はその文の時刻から始まるチャプター名（chapters で使う）。
+  "chapter" はその文の時刻（"chapter_at" があればその秒）から始まるチャプター名（chapters で使う）。
 mux は字幕ファイル（既定は out と同名の .srt）も書き出す。
   --subs   字幕を動画に焼き込む（画面録画向け。Manim の動画は字幕が既に入っているので付けない）。
   --no-voice  音声を付けない（字幕だけ）。VOICEVOX が動いていないときも同じ扱いになる。
@@ -60,7 +60,7 @@ def chapters(items, tl):
     lines = []
     for it, (_, start, _) in zip(items, tl):
         if "chapter" in it:
-            m, s = divmod(int(start), 60)
+            m, s = divmod(int(it.get("chapter_at", start)), 60)
             lines.append(f"{m}:{s:02} {it['chapter']}")
     if lines and not lines[0].startswith("0:00 "): lines[0] = "0:00 " + lines[0].split(" ", 1)[1]
     return lines
