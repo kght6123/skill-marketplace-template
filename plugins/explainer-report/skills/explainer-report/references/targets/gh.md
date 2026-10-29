@@ -13,7 +13,8 @@ gh repo view --json viewerPermission -q .viewerPermission  # WRITE/MAINTAIN/ADMI
 | もの | 置き場所 |
 |---|---|
 | 文章・Mermaid図 | 本文（GitHubがMermaidを描画する） |
-| 画像・スクショ・画面録画・解説動画 | `--attach` |
+| 画像・スクショ・画面録画・解説動画・QR 画像 | `--attach` |
+| プレイグラウンドの URL | 本文のリンク（`references/qr-playground.md`） |
 
 HTMLをGitHub Pagesで公開しない。Teamプランではprivateリポジトリでも
 Pagesサイトが誰でも見られるURLになり、社内情報が漏れるため。

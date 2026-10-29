@@ -13,6 +13,7 @@ reports/<YYYY-MM-DD>-<短い名前>/
     explain.mp4    … 解説動画
     before_*.png / after_*.png / *.mp4  … スクショ・画面録画
     diagram-*.svg  … Mermaidを描画できない読者向けの図（任意）
+    qr_*.png       … HTML/CSS の成果物を開く QR 画像（`references/qr-playground.md`）
 ```
 
 フォルダの場所をユーザーが指定しなければ、リポジトリ内なら `reports/`、それ以外ならカレントディレクトリに作る。
