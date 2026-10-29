@@ -26,6 +26,7 @@ reports/<YYYY-MM-DD>-<短い名前>/
   [解説動画（mp4）](assets/explain.mp4)
   ```
 - Mermaidは ```` ```mermaid ```` のコードブロックで書く。Mermaidを描画しない環境で読まれるなら、`mmdc -i README.md -o README.rendered.md` で SVG に置き換えた版も作る。
+- YouTube に上げた動画は、`assets/` に置かずにリンクで書く：`[解説動画（YouTube）](https://youtu.be/…)`。
 - ファイルサイズの上限は無い。ただしリポジトリにコミットするなら、動画は数MBに収め、大きいものはコミットしない。
 
 ## 仕上げ

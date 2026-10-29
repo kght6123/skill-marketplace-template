@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # 使い方: render_manim.sh <script.py> <SceneClass> [出力先=out/explain.mp4] [--voice narration.json]
 # 720p30でレンダリングし、100MBを超えたら再圧縮する（gh --attach の有料プラン上限に合わせる）。
-# --voice を付けると VOICEVOX（既定：ずんだもん）のナレーションを合成する。付けなければ無音（字幕のみ）。
+# --voice を付けると VOICEVOX（既定：ずんだもん）のナレーションを合成し、YouTube 用の字幕 <出力先>.srt も書き出す。
+# 付けなければ無音（字幕のみ）。
 # 環境変数 VOICE=off で --voice を無効にできる。話者は VOICEVOX_SPEAKER（既定 3 = ずんだもん ノーマル）。
 set -euo pipefail
 NARR=""; ARGS=()
@@ -20,7 +21,8 @@ if [ "$SIZE" -gt 95000000 ]; then
 fi
 if [ -n "$NARR" ]; then
   if "$HERE/voicevox.sh" start; then
-    python3 "$HERE/narrate.py" mux "$NARR" "$OUT" "$OUT.voice.mp4" --speaker "${VOICEVOX_SPEAKER:-3}" && mv "$OUT.voice.mp4" "$OUT"
+    python3 "$HERE/narrate.py" mux "$NARR" "$OUT" "$OUT.voice.mp4" --speaker "${VOICEVOX_SPEAKER:-3}" --srt "${OUT%.mp4}.srt" \
+      && mv "$OUT.voice.mp4" "$OUT"
   else
     echo "VOICEVOX を起動できないため、字幕のみで出力する。" >&2
   fi

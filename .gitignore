@@ -1,2 +1,3 @@
 # Claude Code ローカル設定ファイル
 *.local.md
+__pycache__/

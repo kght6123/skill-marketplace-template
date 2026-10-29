@@ -53,7 +53,7 @@
       "name": "explainer-report",
       "source": "./plugins/explainer-report",
       "category": "development",
-      "description": "AIが作った成果を、文章・Mermaid図・解説動画（任意でずんだもんのナレーション）・画面のスクショで、人間が短時間で理解できる解説レポートにするスキル。出力先は gh（GitHub の Issue/PR）と Markdown"
+      "description": "AIが作った成果を、文章・Mermaid図・解説動画・字幕付きの画面録画（どちらも任意でずんだもんのナレーション）・スクショで、人間が短時間で理解できる解説レポートにするスキル。出力先は gh（GitHub の Issue/PR）と Markdown。動画は任意で YouTube にアップロードし、タイトルや概要はAIが作る"
     },
     {
       "name": "art-style-picker",

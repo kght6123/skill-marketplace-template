@@ -30,4 +30,5 @@ gh pr create --title "<件名>" --body-file body.md \
 - `#説明`（alt text）は画像だけに付ける。動画（mp4）に付けると `cannot set alt text on video` で失敗する。動画の説明は本文に書く。
 - `--attach` はURLを本文末尾に追記する。本文の途中（「画面」「解説動画」の節）に置きたいときは、添付後に出力されたURLを本文の該当の節へ移し、`gh pr edit --body-file` で更新する。
 - 一部の添付だけ失敗しても、Issue/PR自体は作られて終了コードが0以外になることがある。URLが出力されたら作成済みとして扱い、`edit --attach` で不足分だけ足す。作り直さない。
-- 上限：画像10MB、動画100MB（有料プラン）。
+- 上限：画像10MB、動画100MB（有料プラン）。超える動画は、ユーザーに確認して YouTube に上げ（`references/youtube.md`）、本文に URL を書く。
+- YouTube に上げた動画は `--attach` しない。URL を「解説動画」「画面」の節に書く（GitHub は YouTube の URL を埋め込み再生しないので、`[解説動画（YouTube）](https://youtu.be/…)` とリンクにする）。
