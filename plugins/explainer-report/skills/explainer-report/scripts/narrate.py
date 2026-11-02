@@ -3,7 +3,7 @@
   python narrate.py durations narration.json          # 各文の秒数を表示
   python narrate.py srt narration.json out.srt        # 字幕ファイル（YouTube の字幕にも使う）
   python narrate.py chapters narration.json           # YouTube 概要欄のチャプター行
-  python narrate.py mux narration.json in.mp4 out.mp4 [--speaker 3] [--subs] [--no-voice] [--srt out.srt]
+  python narrate.py mux narration.json in.mp4 out.mp4 [--speaker 3] [--subs] [--no-voice] [--srt out.srt] [--sfx sfx.json]
 narration.json: [{"text": "...", "at": 1.5, "caption": "...", "chapter": "..."}, ...]
   "at"（秒）があればその時刻から読み上げる（字幕・操作の時刻に合わせる）。
   無ければ前の文の直後（0.4秒あけて）に続ける。
@@ -12,6 +12,7 @@ narration.json: [{"text": "...", "at": 1.5, "caption": "...", "chapter": "..."},
 mux は字幕ファイル（既定は out と同名の .srt）も書き出す。
   --subs   字幕を動画に焼き込む（画面録画向け。Manim の動画は字幕が既に入っているので付けない）。
   --no-voice  音声を付けない（字幕だけ）。VOICEVOX が動いていないときも同じ扱いになる。
+  --sfx    効果音を混ぜる。sfx.json: [{"at": 秒, "name": "pop|tick|whoosh|thud|chime"}, ...]（VoiceScene が書き出す）
 既定の話者は 3（ずんだもん ノーマル）。標準ライブラリと ffmpeg だけで動く。
 """
 import json, os, subprocess, sys, tempfile, urllib.request, urllib.parse, wave, pathlib, argparse
@@ -33,6 +34,38 @@ def tts(text, spk, path):
 
 def estimate(text):  # VOICEVOX が無いときの読み上げ秒数の見積もり
     return max(1.0, len(text) * 0.13)
+
+def offset(text, word, spk=3, voice=True):
+    """text を読み上げたとき、word を読み始めるまでの秒数。word の前までを読ませて、音の長さを足す。"""
+    i = text.find(word)
+    if i < 0: raise ValueError(f"「{word}」が文に無い: {text}")
+    if i == 0: return 0.0
+    if not voice: return estimate(text) * i / len(text)
+    q = json.loads(urllib.request.urlopen(urllib.request.Request(
+        f"{API}/audio_query?speaker={spk}&text={urllib.parse.quote(text[:i])}", method="POST")).read())
+    t = q["prePhonemeLength"]
+    for ap in q["accent_phrases"]:
+        for m in ap["moras"] + ([ap["pause_mora"]] if ap.get("pause_mora") else []):
+            t += (m.get("consonant_length") or 0) + m["vowel_length"]
+    return t / q["speedScale"]
+
+# 効果音は ffmpeg の発振器で作る（音源ファイルを持たない）。どれも短く、小さめの音量で混ぜる
+SFX = {
+    "pop":    "sine=f=880:d=0.09,afade=t=out:st=0.02:d=0.07",
+    "tick":   "sine=f=1800:d=0.03,afade=t=out:d=0.03",
+    "whoosh": "anoisesrc=d=0.45:c=pink:a=0.5,bandpass=f=1200:w=900,afade=t=in:d=0.2,afade=t=out:st=0.2:d=0.25",
+    "thud":   "sine=f=70:d=0.3,afade=t=out:st=0.05:d=0.25",
+    "chime":  "sine=f=1318:d=0.6,afade=t=out:st=0.05:d=0.55",
+}
+
+def sfx_clips(events, gain=-14):
+    tmp = pathlib.Path(tempfile.mkdtemp()); out = []
+    for i, e in enumerate(events):
+        f = str(tmp / f"sfx{i:03}.wav")
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", SFX[e["name"]],
+                        "-af", f"volume={e.get('gain', gain)}dB", "-ar", "24000", "-ac", "1", f], check=True)
+        out.append((f, float(e["at"])))
+    return out
 
 def timeline(items, spk=3, voice=True, quiet=False):
     """各文の (wavパス or None, 開始秒, 長さ秒) を返す。"""
@@ -65,10 +98,11 @@ def chapters(items, tl):
     if lines and not lines[0].startswith("0:00 "): lines[0] = "0:00 " + lines[0].split(" ", 1)[1]
     return lines
 
-def mux(items, tl, inp, out, subs=False, srt=None):
+def mux(items, tl, inp, out, subs=False, srt=None, sfx=()):
     srt = srt or str(pathlib.Path(out).with_suffix(".srt"))
     write_srt(items, tl, srt)
-    clips = [(f, s) for f, s, _ in tl if f]
+    voiced = any(f for f, _, _ in tl)
+    clips = [(f, s) for f, s, _ in tl if f] + sfx_clips(sfx)
     ins = sum([["-i", f] for f, _ in clips], [])
     fl, maps = [], ["-map", "0:v"]
     if subs:
@@ -82,13 +116,13 @@ def mux(items, tl, inp, out, subs=False, srt=None):
     fc = ["-filter_complex", ";".join(fl)] if fl else []
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", inp, *ins, *fc, *maps, *vcodec,
                     "-movflags", "+faststart", out], check=True)
-    print("->", out, "/", srt + ("（本文に「VOICEVOX:ずんだもん」などのクレジットを書く）" if clips else ""))
+    print("->", out, "/", srt + ("（本文に「VOICEVOX:ずんだもん」などのクレジットを書く）" if voiced else ""))
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument("cmd", choices=["durations", "srt", "chapters", "mux"])
     ap.add_argument("script"); ap.add_argument("inp", nargs="?"); ap.add_argument("out", nargs="?")
     ap.add_argument("--speaker", type=int, default=3); ap.add_argument("--subs", action="store_true")
-    ap.add_argument("--no-voice", action="store_true"); ap.add_argument("--srt")
+    ap.add_argument("--no-voice", action="store_true"); ap.add_argument("--srt"); ap.add_argument("--sfx")
     a = ap.parse_args()
     items = json.load(open(a.script))
     voice = not a.no_voice and available()
@@ -96,7 +130,7 @@ def main():
     tl = timeline(items, a.speaker, voice, quiet=a.cmd == "chapters")
     if a.cmd == "srt": write_srt(items, tl, a.inp or "out.srt"); print("->", a.inp or "out.srt")
     elif a.cmd == "chapters": print("\n".join(chapters(items, tl)))
-    elif a.cmd == "mux": mux(items, tl, a.inp, a.out, a.subs, a.srt)
+    elif a.cmd == "mux": mux(items, tl, a.inp, a.out, a.subs, a.srt, json.load(open(a.sfx)) if a.sfx else ())
 
 if __name__ == "__main__":
     main()
