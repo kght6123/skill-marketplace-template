@@ -28,7 +28,8 @@ AUTO="${OUT%.mp4}.narration.json"; SFXJ="${OUT%.mp4}.sfx.json"; rm -f "$AUTO" "$
 export PYTHONPATH="$HERE${PYTHONPATH:+:$PYTHONPATH}" NARRATION_OUT="$(cd "$(dirname "$AUTO")" && pwd)/$(basename "$AUTO")"
 export EXPLAINER_VOICE="${VOICE_ON:+1}"
 manim "-q${QUALITY:-m}" --format mp4 -o explain_raw "$SRC" "$SCENE"
-RAW=$(find media/videos -name 'explain_raw.mp4' -newer "$SRC" | head -1)
+# 下書き（480p15）と本番（720p30）は別のフォルダに出るので、今描いた一番新しいものを使う
+RAW=$(ls -t $(find media/videos -name 'explain_raw.mp4' -newer "$SRC") | head -1)
 # GitHubのブラウザ再生互換のため H.264 + yuv420p + faststart に揃える
 ffmpeg -y -loglevel error -i "$RAW" -c:v libx264 -pix_fmt yuv420p -crf 23 -movflags +faststart -an "$OUT"
 SIZE=$(stat -c%s "$OUT" 2>/dev/null || stat -f%z "$OUT")
