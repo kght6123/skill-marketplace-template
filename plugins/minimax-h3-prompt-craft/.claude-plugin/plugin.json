@@ -1,7 +1,7 @@
 {
   "name": "minimax-h3-prompt-craft",
-  "description": "MiniMax H3（音声付き動画生成モデル）向けのプロンプトを新規作成・改良するスキル",
-  "version": "1.0.0",
+  "description": "MiniMax H3（Hailuo 3。映像とステレオ音声を同時生成する動画生成モデル）向けの構造化プロンプトを新規作成・変換・修正するスキル",
+  "version": "2.0.0",
   "author": {
     "name": "kght6123",
     "url": "https://github.com/kght6123"

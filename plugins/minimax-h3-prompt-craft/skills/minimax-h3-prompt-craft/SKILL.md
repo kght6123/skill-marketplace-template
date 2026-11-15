@@ -1,252 +1,175 @@
 ---
 name: minimax-h3-prompt-craft
-description: MiniMax H3（音声付き動画生成モデル）向けのプロンプトを新規作成・改良するスキル。ユーザーが「MiniMax H3のプロンプトを作って」「H3用のプロンプトに直して」「T2VAのプロンプトを書いて」「I2VA/FL2VA/L2VAで生成したい」「Ref2VAで参照画像を使ったプロンプトを作って」「音声込みの動画プロンプト」などと言った場合に使用する。integrated_multimodal_description・overall_soundscape・non_diegetic_musicの組み立て方、Ref2VAでの参照ラベル（<Picture 1>等）の付け方、モード（T2VA/I2VA/FL2VA/L2VA/Ref2VA）の判定に関する質問にも積極的に使う。
+description: MiniMax H3（Hailuo 3 / MiniMax-H3。映像とステレオ音声を同時生成するオムニモーダル動画生成モデル）向けの構造化プロンプトを新規作成・変換・修正するスキル。ユーザーが「H3のプロンプトを作って」「MiniMax H3」「Hailuo 3」「T2VA」「I2VA」「FL2VA」「L2VA」「ref2va」「integrated_multimodal_description」「subject_definitions」「retention_analysis」「first-last frameのプロンプト」「参照画像つき動画プロンプト」などと言ったら必ず使う。台詞・リップシンク・環境音・BGMまで指定する動画プロンプト、first/last frame制御、参照画像/参照動画/参照音声を使った生成、動画編集・動画継続のプロンプト、既存のWan2.2やSora系プロンプトをH3形式へ書き換える依頼にも積極的に使う。
 ---
 
-# MiniMax H3 Prompt Craft
+# MiniMax H3 プロンプトクラフト
 
-MiniMax H3（テキスト・画像・動画・音声を入力に、音声付き動画を生成するモデル）向けに、コピペで使えるプロンプトを組み立てるスキル。
+MiniMax H3 は映像と音声を1パスで同時生成するモデルで、プロンプトは「タグの羅列」ではなく **固定フィールド名を持つ構造化ドキュメント** として書く。フィールド名・記法・定型文はモデルが学習した通りの綴りでなければ効かないため、本スキルの literal（英語の定型文字列）は一字一句そのまま出力する。
 
----
+## 前提スペック
 
-## 0. モードを判定する
+- 尺 4〜15秒 / 24fps。ショット数は尺に対して過密にしない（5秒なら1〜2ショットが上限目安）
+- 映像と音声は同時生成。音を書かないと「無音の映像」ではなく「適当な音」が付く
+- 参照は画像最大9枚・動画3本・音声3本まで1コンテキストに混在可能
+- 出力プロンプト本体は**英語で書く**。ただし `<d>` 内の台詞・歌詞、および画面内に映る文字は**原語のまま**保持する
 
-ユーザーの入力（テキストだけか、画像があるか、動画があるか、音声があるか）から、まず生成モードを1つ決める。
+## Step 1: モードを判定する
 
-| モード | 入力 | 用途 |
-| --- | --- | --- |
-| T2VA | テキストのみ | ゼロから音声付き動画の全体を組み立てる |
-| I2VA | 最初のフレーム画像＋テキスト | 1枚絵を起点に、そこから先の展開を描写する |
-| FL2VA | 最初と最後のフレーム画像＋テキスト | 2枚の画像をつなぐ連続した動きを描写する |
-| L2VA | 最後のフレーム画像＋テキスト | 最後の絵に自然に収束するように、それ以前の展開を組み立てる |
-| Ref2VA | 複数の参照素材（画像／動画／音声）＋テキスト | 既存の人物・物・声・音楽などを維持しつつ新しいシーンを作る |
+ユーザーの入力素材で決まる。判定を誤ると先頭の定型文が変わってしまうので、曖昧なら聞き返す。
 
-迷ったら「参照して維持したい画像・動画・音声があるか」を確認する。あれば Ref2VA、なければ入力されているフレーム画像の有無で T2VA / I2VA / FL2VA / L2VA を選ぶ。
+| 入力 | モード | 読むファイル |
+|---|---|---|
+| テキストのみ | **T2VA** | `references/base-modes.md` |
+| 画像1枚を1フレーム目にする | **I2VA** | `references/base-modes.md` |
+| 画像2枚を最初と最後にする | **FL2VA** | `references/base-modes.md` |
+| 画像1枚を最終フレームにする | **L2VA** | `references/base-modes.md` |
+| 人物/背景/スタイル/動きの「参照」として素材を使う、参照動画・参照音声がある、既存動画の編集・継続 | **フルリファレンス** | `references/full-reference.md` |
 
----
+判定のコツ：画像がその**フレームそのもの**になるなら base 側（キーフレーム）、画像から**特徴だけ取り出して別の絵を作る**ならフルリファレンス。参照動画や参照音声が1つでも絡んだら必ずフルリファレンス。
 
-## 1. ベースモード（T2VA / I2VA / FL2VA / L2VA）の組み立て方
+該当するリファレンスファイルを読んでから書き始める。このSKILL.mdに載っているのは**両モード共通の記法**だけで、フィールド構成・先頭の定型文・参照ラベルの規則はリファレンス側にある。
 
-以下の3つの要素を、この順番で書く。
+## Step 2: タイムラインを組む
 
-1. **`integrated_multimodal_description`**：シーン全体を時間軸に沿って描写する本体部分。被写体・構図・環境・動作・カメラワーク・音の発生源を、時間経過がわかる形で書く。
-2. **`overall_soundscape`**：環境音・効果音など、画面内の出来事に紐づく音を描写する。せりふ・足音・風の音・物音など。
-3. **`non_diegetic_music`**：画面内の出来事とは独立したBGM・劇伴を描写する。ジャンル、テンポ、雰囲気を書く。
+本文は再生順に書く。すべての記述は「画面に見える」か「耳に聞こえる」ものに対応させる。「彼女は不安を感じている」のような内面描写は書かない。「彼女の指がカップの縁を繰り返しなぞる」と書く。
 
-モードごとの描写の起点は以下のように変える。
+### ショットとカット
 
-- **T2VA**：時間軸の最初から最後まで、シーン全体をゼロから設計する。
-- **I2VA**：与えられた最初のフレームの状態を簡潔に確認したうえで、そこからの展開だけを描写する。
-- **FL2VA**：最初のフレームと最後のフレームの間を、どう動き・移り変わるかに焦点を当てて描写する。
-- **L2VA**：最後のフレームに何が起きて収束するのかが分かるように、そこへ至る妥当な展開を逆算して描写する。
-
----
-
-## 2. Ref2VA（参照モード）の組み立て方
-
-Ref2VAでは、渡された参照素材を保持しながら新しいシーンを作る。以下の順番でセクションを書く。
-
-1. **`subject_definitions`**：各参照素材に一意なラベルを割り当て、何を参照しているか定義する。ラベルは `<Picture 1>` `<Video 1>` `<Audio 1>` のように、種類＋連番の形式で統一する。
-2. **`summary`**：完成させたいシーンの要約を1〜2文で書く。
-3. **`retention_analysis`**：各参照ラベルについて、何を維持し何を変えてよいかを明記する（例：人物の外見・声質は維持、服装や背景は変更可）。
-4. **`detailed_description`**：`subject_definitions` のラベルを使いながら、シーンの時間展開を具体的に描写する。参照素材がどの時点でどう現れるかも明記する。
-5. **`overall_soundscape`**：ベースモードと同様、環境音・効果音を描写する。
-6. **`non_diegetic_music`**：ベースモードと同様、BGM・劇伴を描写する。
-
-参照ラベルは `subject_definitions` で定義したものを、以降のすべてのセクションで一貫して使う。別の呼び方に変えたり、定義していないラベルを新たに使ったりしない。
-
----
-
-## 3. 書き方のコツ
-
-- 各セクションは英語で書く。ただし、せりふ・歌詞・画面内の文字など「そのまま残すべきテキスト」は元の言語を保持する。
-- 各ショットは「構図」「被写体」「環境」「動作」「カメラ」「音」を一通り押さえて描写する。あらすじの要約や、抽象的な褒め言葉（"beautiful", "cinematic" など）だけで済ませない。
-- 動画の長さ（目安4〜15秒）とプロンプト内の時間展開を一致させる。長さに対して展開が多すぎたり少なすぎたりしないか確認する。
-- I2VA / FL2VA / L2VA では、与えられたフレームとプロンプトの展開がどうつながるかを明示する。
-- 参照ラベルが宙に浮かない（定義したのに使われない、使われているのに定義されていない）ようにする。
-
----
-
-## 4. 出力フォーマット
-
-必ずこの形で出す。説明は最小限、コピペのしやすさを優先する。
-
-見出し（`integrated_multimodal_description` 等）はプロンプトの構成要素名であり、実際にどの形式（フォームの各欄、JSON、見出し付きテキストなど）で投入するかは利用するツール・APIの仕様に従う。見出しごとに内容を分けて書いておけば、どの投入形式にも組み替えやすい。
-
-### ベースモード（T2VA / I2VA / FL2VA / L2VA）
-
-````
-## integrated_multimodal_description
-
-```
-（シーン全体の時間展開の描写）
+```text
+[Shot 1] Live-action, cinematic, a medium-wide shot frames ...
+[Shot 2] At 00:03.500, the camera cuts to ...
 ```
 
-## overall_soundscape
+- `[Shot 1]` にタイムスタンプは付けない
+- 2ショット目以降は `[Shot N] At MM:SS.mmm,` で始め、カット時刻は**厳密に増加**させ、尺の中に収める
+- カット動詞は `the camera cuts to` / `the shot cuts to` / `the shot transitions to` / `the shot changes to` / `the shot switches to`。ユーザーが明示的に求めた場合のみ cross-dissolve / fade / wipe を使う
+- カットは被写体・空間・状態・視点・時間のいずれかに**新情報**をもたらすときだけ切る。寄り引きや微妙な角度変更だけならカットせずカメラワークで処理する
 
-```
-（環境音・効果音の描写）
-```
+### スタイル指定
 
-## non_diegetic_music
+`[Shot 1]` の冒頭に映像スタイルと初期構図を置く。よく使う語：`Cinematic` / `live-action` / `2D-animated` / `3D CG` / `claymation` / `watercolor` / `vintage film`。参照画像があるモードでは**画像から読み取ったスタイル**を書く。T2VA ではユーザーのテキストから選ぶ。
 
-```
-（BGM・劇伴の描写）
-```
-````
+（フルリファレンスモードだけはスタイルを `[Shot 1]` の**前**に1〜2文で置く。詳細は `references/full-reference.md`。）
 
-### Ref2VA
+## Step 3: カメラワークを書く
 
-````
-## subject_definitions
+カメラワークは「動きの種類 + 振れ幅 + 速度」の3次元で表現する。振れ幅・速度は**意味があるときだけ**付ける（中程度・通常速度は省略するのが正しい）。
 
-```
-（参照ラベルの定義）
-```
+| 次元 | 表現 | 意味 |
+|---|---|---|
+| 種類 | `Zoom In / Zoom Out` | カメラ本体は固定で焦点距離が変わる |
+| 種類 | `Push In / Pull Out` | カメラ本体が前進 / 後退 |
+| 種類 | `Pan Left / Pan Right` | 位置は固定でレンズが水平に振れる |
+| 種類 | `Truck Left / Truck Right` | カメラが水平に平行移動 |
+| 種類 | `Tilt Up / Tilt Down` | 位置は固定でレンズが垂直に振れる |
+| 種類 | `Pedestal Up / Pedestal Down` | カメラ全体が上昇 / 下降 |
+| 種類 | `Arc Shot` | 被写体を中心に弧を描いて移動 |
+| 種類 | `Tracking Shot` | 動く被写体を追う |
+| 種類 | `Static Shot` | 位置もレンズも動かない |
+| 種類 | `Shake Slightly / Shake Strongly` | 軽い / 強い手ブレ |
+| 種類 | `POV` | 被写体の主観視点 |
+| 種類 | `Roll Clockwise / Roll Counterclockwise` | レンズ軸まわりの時計回り / 反時計回り回転 |
+| 振れ幅 | `with small amplitude` / `with large amplitude` | 変化の範囲 |
+| 速度 | `at slow speed` / `at fast speed` | 変化のテンポ |
 
-## summary
+ラベルを文末に積み上げるのではなく、ショットの中の**自然な英文の動作**として書く。
 
-```
-（シーンの要約）
-```
-
-## retention_analysis
-
-```
-（維持する要素／変えてよい要素）
-```
-
-## detailed_description
-
-```
-（時間展開の詳細描写）
-```
-
-## overall_soundscape
-
-```
-（環境音・効果音の描写）
+```text
+The camera pushes in with small amplitude at slow speed toward the folded letter in her hands.
+The camera pans right with large amplitude at fast speed, revealing the open doorway.
+The camera holds a static shot as the runner exits the frame.
 ```
 
-## non_diegetic_music
+## Step 4: 話者・台詞・歌唱
 
-```
-（BGM・劇伴の描写）
-```
-````
+発話・歌唱・オフスクリーンの人声を出す主体には `(S1)` `(S2)` … の安定IDを与える。複数人が同時に発話・歌唱するときは `(S1,S2)` のように連結する。IDはショットをまたいでも同じものを使い、**一度も声を出さない登場人物にはIDを付けない**。
 
----
+初出時は、キャラクタータイプ・年齢・性別・画面内かどうか・声の高さ・音色・話速・訛りなど、同一性が安定する程度の情報を添える。
 
-## 5. 作成ワークフロー
+**`<d>` の中には言語タグと実際の発話内容だけを入れる。**話者の識別語・ID・動作・言い方はすべて `<d>` の外側に置く。台詞の語と句読点は原文のまま保持し、翻訳も書き換えもしない。
 
-「○○のプロンプトを作って」と言われたら：
-
-1. **モード判定**（§0）
-2. **テーマ分解**：被写体／シーン（場所・時間）／動作の流れ／音の要素／（Ref2VAなら）参照素材と維持したい要素
-3. **モードに応じたセクション構成で執筆**（§1 または §2）
-4. **書き方のコツをチェック**（§3）：長さの整合性・参照ラベルの一貫性・具体性
-5. **§4のフォーマットで出力**
-
----
-
-## 6. 完成例
-
-### T2VAの例（想定尺：約12秒）
-
-````
-## integrated_multimodal_description
-
-```
-A small coastal café at sunrise. A young barista wipes down the counter, then
-looks up as the door chime rings. An elderly customer steps in, shaking rain
-off an umbrella, and takes a seat by the window. The barista walks over,
-notepad in hand, and the two exchange a brief nod of familiarity. The camera
-starts on the door, then pans to follow the barista across the room, settling
-into a medium shot of the table as the customer begins to speak.
+```text
+The young woman with a quiet, breathy voice (S1) says: <d>[English] I get off at the next station.</d>
+The two children (S1,S2) shout together, <d>[English] Wait for us!</d>
 ```
 
-## overall_soundscape
+**ボイスオーバー**は `says in an off-screen voiceover` という句をそのまま使い、`<d>` ブロックの直後に、対応する画面内キャラクターの唇が閉じたままであることを明記する。
 
-```
-Door chime on entry. Rain tapping against the window. Footsteps on wooden
-floor. Umbrella being folded and set against a chair. Low murmur of the
-customer speaking, cup placed on saucer.
+```text
+The man (S1) says in an off-screen voiceover: <d>[English] I still remember that road.</d> while his lips remain completely closed.
 ```
 
-## non_diegetic_music
+**カットをまたぐ台詞・歌詞**は、両側の接続点に `<scenetrans>` を置き、音声がカットを越えて続くことを明示する。動画の終端で発話が途切れる場合は `<cutoff>` を使う。継続の言い回しは `continues seamlessly across the cut` / `continues uninterrupted into the next shot` / `carries over from the previous shot` / `remains audible across the transition`。
 
-```
-Soft acoustic guitar, slow tempo, warm and unhurried, fading in gently after
-the door chime and staying low as the conversation begins.
-```
-````
+## Step 5: 画面内テキスト
 
-### Ref2VAの例（想定尺：約10秒。`<Picture 1>` に写る人物を維持しつつ新しいシーンを作る）
+看板・バナー・ラベル・字幕・ネオンなど、**実際に画面に映る文字**は英語のダブルクォートで囲む。原文と句読点をそのまま保ち、翻訳しない。
 
-````
-## subject_definitions
-
-```
-<Picture 1>: the woman shown in the reference image — her face, hairstyle,
-and body proportions are the subject to retain.
+```text
+A red neon sign reading "営業中" glows above the doorway.
 ```
 
-## summary
+## Step 6: 音の2フィールドを埋める
 
-```
-The woman from <Picture 1> walks through a night market, pausing at a
-lantern stall.
-```
+### `overall_soundscape`
 
-## retention_analysis
+動画全体の環境音・物理的な動作音・非言語の人声（風、雨、交通音、足音、衣擦れ、衝撃音、呼吸、笑い、息切れなど）を、**英語1〜4文の連続した1段落**で要約する。台詞・歌唱・劇中音楽は本文側に書くものなので、ここで繰り返さない。`N/A` は、ユーザーが全編無音を明示的に求めた場合に限る。
 
-```
-<Picture 1>: retain her face, hairstyle, and body proportions exactly, as
-defined in subject_definitions. Her outfit is not part of the retained
-subject and may change to match the night market setting; the reference
-image's background is not retained either.
+```text
+overall_soundscape: Steady rain taps against the café windows while low room ambience continues underneath. The entrance bell rings once, followed by wet footsteps and the soft scrape of a chair.
 ```
 
-## detailed_description
+### `non_diegetic_music`
 
-```
-The scene opens on a crowded night market lit by hanging paper lanterns.
-The woman from <Picture 1> walks slowly between stalls, her retained face
-and hairstyle clearly visible under the warm light. She stops at a lantern
-stall around the midpoint, reaching out to touch one of the lanterns as it
-sways. The camera follows her from a three-quarter angle, then settles into
-a close-up on her face as she smiles.
+登場人物には聞こえず観客だけに聞こえるBGMを**英語1〜3文**で書く。楽器編成・テンポ・リズム・強弱の変化に集中し、抽象的なムード語や「感情を高める役割」といった説明は書かない。登場人物に聞こえる歌唱・演奏・ラジオ・テレビ・スマホの音は劇中音であり本文側に書く。BGMがなければ `N/A`。
+
+```text
+non_diegetic_music: Sparse piano notes at a slow tempo, joined by sustained low strings that gradually increase in volume before fading out.
 ```
 
-## overall_soundscape
+## 出力の作法
 
-```
-Murmur of market crowds, distant vendor calls, wind chimes, paper lanterns
-rustling in the breeze.
-```
+- 完成プロンプトは**そのままコピペできる1つのコードブロック**で出す。フィールド間には空白行を1つ入れる
+- 先頭の位置合わせ定型文（I2VA / FL2VA / L2VA / フルリファレンス）は必ず1行目に置き、その後に空白行を1つ入れてからフィールド本体に入る
+- コードブロックの外に、日本語で「モード判定の根拠」「尺とショット構成」「カメラワークの意図」を数行で添える。ユーザーが調整したい箇所を見つけやすくする
+- 既存プロンプト（Wan2.2 / Sora / Veo 形式など）の変換依頼では、元の意図を保ったままH3の構造に載せ替える。元プロンプトに音の指定がなければ、映像から自然に導ける音を補って2つの音フィールドを必ず埋める
 
-## non_diegetic_music
+## よくある失敗
 
-```
-Light, playful erhu melody with a steady percussive undertone, matching the
-festive atmosphere.
-```
-````
+- **音フィールドを空にする** — H3は音を同時生成するので、指定しないと勝手な音が乗る。`N/A` は明示的な要求がある場合のみ
+- **`<d>` の中に話者情報や言い方を入れる** — IDも「〜と叫ぶ」もすべて外側
+- **短い尺にカットを詰め込む** — 5秒に4ショットは破綻する。寄り引きはカメラワークで解決する
+- **振れ幅・速度を全カメラワークに付ける** — 中程度・通常速度は書かない方が正しく出る
+- **内面・感情の描写** — 見えるもの・聞こえるものだけに変換する
+- **キーフレーム画像の静止描写を並べるだけ** — FL2VA / L2VA で最も多い失敗。画像間を**どう動いて繋ぐか**が本体
 
----
+## リファレンス
 
-## 7. 自己改善
+- `references/base-modes.md` — T2VA / I2VA / FL2VA / L2VA の完全仕様。先頭定型文、フィールド構成、キーフレームの組み込み方、4モードの完成例
+- `references/full-reference.md` — フルリファレンスモードの完全仕様。6セクション構成、`<Subject N>` 等4種のラベル、タスクタイプ、保持関係マーカー、完成例
 
-このSKILL.mdはマーケットプレイスの配布物であり、直接編集しない。プラグインが更新されるたびに上書きされ、更新を受け取れなくなるため。
+## 出典と更新
 
-ユーザーから出力への指摘があったら、このスキルを親とする**子スキル**に追記する。
+本スキルの仕様は MiniMax 公式のプロンプトガイドに基づく。原文（Markdown生データ、そのまま取得できる）：
 
-- 子スキルの場所：`~/.claude/skills/minimax-h3-prompt-craft-updates/SKILL.md`（無ければ新規作成する）
-- 子スキルのフロントマター例：
-  ```
-  ---
-  name: minimax-h3-prompt-craft-updates
-  description: minimax-h3-prompt-craft スキルの追加ルール・更新知見を保持する子スキル。minimax-h3-prompt-craft を使う際は必ず一緒に参照する。
-  ---
-  ```
-- 追記後、子スキルのどこを更新したかを一言で伝える
+| 対応リファレンス | 原文URL |
+|---|---|
+| `references/base-modes.md` | https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_base_en.md |
+| `references/full-reference.md` | https://huggingface.co/MiniMaxAI/MiniMax-H3/resolve/main/docs/VIDEO_PROMPT_WRITING_GUIDE_ref_en.md |
+
+ドキュメント一覧（新しいガイドが追加されていないかの確認用）：
+https://huggingface.co/MiniMaxAI/MiniMax-H3/tree/main/docs
+
+**更新手順** — ユーザーが「H3のガイドが更新された」「仕様を最新にして」等と言った場合、または定型文が効かなくなったという報告があった場合：
+
+1. 上記2つのURLを取得する
+2. 特に次の項目を差分確認する。ここが変わると出力が壊れる
+   - 先頭の位置合わせ定型文3種（I2VA / FL2VA / L2VA）の文字列
+   - フィールド名（`integrated_multimodal_description` / `subject_definitions` / `retention_analysis` など）
+   - カメラワーク語彙表の値
+   - 保持関係マーカー（`fully_preserved` / `fully_copy` など）とタスクタイプ名
+   - `<d>` `<scenetrans>` `<cutoff>` などのタグ記法
+3. 変更があった箇所だけ該当リファレンスに反映する。作例は書式が変わった場合のみ直す
+
+`resolve/main/` のURLは常に最新リビジョンを返すため、固定リビジョンで確認したい場合は `main` をコミットハッシュに置き換える。
