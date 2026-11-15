@@ -11,6 +11,7 @@ Claude Code / Copilot CLI / Codex CLI / OpenCode に対応した Agent Skills �
 | [anima-prompt-craft](./plugins/anima-prompt-craft/) | Anima（CircleStone Labs × Comfy Org の2Bアニメ特化 text-to-image モデル）向けのプロンプトを新規作成・改良・診断するスキル |
 | [minimax-h3-prompt-craft](./plugins/minimax-h3-prompt-craft/) | MiniMax H3（音声付き動画生成モデル）向けのプロンプトを新規作成・改良するスキル |
 | [wan22-prompt-craft](./plugins/wan22-prompt-craft/) | Wan2.2（Alibaba製オープンソース動画/画像生成モデル）向けのプロンプトを新規作成・修正・改善するスキル |
+| [moss-image-prompt-craft](./plugins/moss-image-prompt-craft/) | MOSS-Image（OpenMOSS製5B DiT画像生成モデル）向けのプロンプト（キャプション／タグ列／Layout JSON）と推奨設定を作成・改善するスキル。公式の座標変換スクリプト（Apache-2.0）を同梱 |
 | [sdxl-original-character-prompt-craft](./plugins/sdxl-original-character-prompt-craft/) | 特定のオリジナルキャラクター向けにSDXL用プロンプト（ポジティブ＋ネガティブ）を生成・改良するスキル |
 | [ai-dev-orchestration](./plugins/ai-dev-orchestration/) | 複数プロジェクトのAI開発を、人間の処理量を上限にして回すオーケストレーションのスキル群（orch-core / orch-run / orch-issue-memo / orch-implement / orch-review-triage / orch-memo-check） |
 | [explainer-report](./plugins/explainer-report/) | AIが作った成果を、文章・Mermaid図・解説動画（標準かロング版）・字幕付きの画面録画（どちらも任意でずんだもんのナレーション）・スクショ（HTML/CSS の成果物なら試せる QR とリンク）で、人間が短時間で理解できる解説レポートにするスキル。出力先は gh（GitHub の Issue/PR）と Markdown。動画は任意で YouTube にアップロードし、タイトルや概要はAIが作る |

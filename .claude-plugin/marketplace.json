@@ -38,6 +38,12 @@
       "description": "Wan2.2（Alibaba製オープンソース動画/画像生成モデル）向けのプロンプトを新規作成・修正・改善するスキル"
     },
     {
+      "name": "moss-image-prompt-craft",
+      "source": "./plugins/moss-image-prompt-craft",
+      "category": "creative",
+      "description": "MOSS-Image（OpenMOSS製5B DiT画像生成モデル）向けのプロンプト（キャプション／タグ列／Layout JSON）と推奨設定を作成・改善するスキル"
+    },
+    {
       "name": "sdxl-original-character-prompt-craft",
       "source": "./plugins/sdxl-original-character-prompt-craft",
       "category": "creative",

@@ -1,0 +1,9 @@
+{
+  "name": "moss-image-prompt-craft",
+  "description": "MOSS-Image（OpenMOSS製5B DiT画像生成モデル）向けのプロンプト（キャプション／タグ列／Layout JSON）と推奨設定を作成・改善するスキル",
+  "version": "1.0.0",
+  "author": {
+    "name": "kght6123",
+    "url": "https://github.com/kght6123"
+  }
+}

@@ -1,0 +1,10 @@
+This skill bundles files from OpenMOSS/MOSS-Image
+(https://github.com/OpenMOSS/MOSS-Image), licensed under the Apache License 2.0
+(see LICENSE.upstream):
+
+- scripts/compile_prompt.py, scripts/test_compile_prompt.py
+  (from skills/moss-image-prompt-enhancer/scripts/, unmodified)
+- references/layout.md (from skills/moss-image-prompt-enhancer/references/, unmodified)
+- references/USERGUIDE.md (from USERGUIDE.md, unmodified)
+
+SKILL.md is an original Japanese write-up based on the upstream guide and skill.
