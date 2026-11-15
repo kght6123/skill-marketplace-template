@@ -17,7 +17,7 @@ Karpathy氏の4手段（文章→図/画像→Webページ→動画）を、毎�
 | 画像 | Mermaidで表しにくいものはSVG/PNG | `references/mermaid.md` |
 | Webページ・画面 | 変更前後のスクショ＋操作の画面録画（mp4。字幕＋任意でナレーション） | `references/screen-capture.md` |
 | 試せるページ | HTML/CSS の成果物だけ：プレイグラウンドで開ける QR 画像と URL | `references/qr-playground.md` |
-| 動画 | Manimの3Blue1Brown風mp4（字幕＋任意でナレーション） | `references/manim-3b1b.md` |
+| 動画 | 絵コンテ表 → Manimの3Blue1Brown風mp4（字幕＋任意でナレーション・効果音） | `references/storyboard.md`、`references/manim-3b1b.md` |
 
 作り方は出力先によらず同じ。最後の「出す」手順だけが出力先で変わる。
 
@@ -51,7 +51,7 @@ node --version               # HTML/CSS の成果物に QR を付ける場合の
 2. **伝えたいことを決める**：レポートの種類ごとに「読者が理解すべきこと」を書き出す。これが図の種類と数を決める。`references/mermaid.md` の対応表を見る。
 3. **本文を書く**：事実メモを "80% of the way to ASD-STE100" の日本語で書き直す（`references/ste-japanese.md`）。前後で事実の件数を見比べ、消えた事実は戻す。構成は下の「本文テンプレート」を使う。
 4. **図を作る**：手順2で決めた「伝えたいこと」ごとに、合う種類の図を1枚ずつ作る。枚数の上限は設けない。各図は1メッセージ・8要素程度に保ち、超えるなら分割する。`mmdc` で描画を検証する。Mermaidで表しにくいもの（画面配置、数値の推移、空間的な構成）は画像にする。
-5. **動画を作る**：`references/manim-3b1b.md` に従い、台本とManimスクリプトを書き `scripts/render_manim.sh` でmp4にする。音声はオプション。ナレーションを付けるときは `--voice narration.json` を渡す（既定はずんだもん。付けなければ字幕のみ）。100MB未満にする。
+5. **動画を作る**：まず `references/storyboard.md` に従い、1文ごとに「画面に何があり、何をしていて、視聴者が何を分かるか」を書いた絵コンテ表を作る。箱とラベルだけの動画にしない。次に `references/manim-3b1b.md` に従い、`VoiceScene` で Manim スクリプトを書き、`scripts/render_manim.sh` でmp4にする。下書き → `scripts/review_video.py` で一覧画像と検査 → 直す、を2回以上繰り返してから本番を描画する。音声はオプション（`--voice` で既定はずんだもん。付けなければ字幕のみ）。効果音は `--sfx`。100MB未満にする。
    長さは既定で30〜90秒。ユーザーが「ロング版」「詳しく」「時間がかかってもいい」などと言ったら、5〜15分・章立て・ナレーション付きのロング版にする（`references/manim-3b1b.md` の「長さ：標準とロング」）。
 6. **画面の変更があれば、スクショと画面録画を必ず付ける**：差分にUI（テンプレート、CSS、フロントエンドのコンポーネント、生成HTMLなど）が含まれるか、報告の対象が画面の不具合や要望なら必須。`references/screen-capture.md` に従う。
    - スクショ：変更した画面ごとに **変更前と変更後** を撮る。
