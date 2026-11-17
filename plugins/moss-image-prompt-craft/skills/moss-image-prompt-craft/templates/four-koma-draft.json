@@ -1,0 +1,83 @@
+{
+  "width": 768,
+  "height": 2048,
+  "bbox_coord_space": "abs",
+  "bbox_format": "xyxy",
+  "summary": {
+    "meta": ["yonkoma", "4-panel manga", "comic strip", "manga"],
+    "canvas": "multi_panel",
+    "caption": "A vertical four-panel Japanese yonkoma comic strip on a white page, with a short title at the top and four equal stacked horizontal panels separated by clean white gutters. Clean black ink line art with light gray screentone shading, consistent character design across all panels: a teenage girl with a short dark bob haircut, white hoodie and a smartphone, and a small fluffy orange tabby cat. Panels read from top to bottom. Speech bubbles are white with thin black outlines and contain short Japanese manga lettering."
+  },
+  "items": [
+    {
+      "label": "text",
+      "caption": "Bold black Japanese comic title lettering, centered, with no backing panel.",
+      "text": "ねこ撮影",
+      "bbox": [224, 48, 544, 160]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 1 (setup): a rectangular manga panel with a thick black border. A quiet residential street with a low concrete wall in soft afternoon light; an orange tabby cat sits on top of the wall on the right side.",
+      "bbox": [48, 192, 720, 624]
+    },
+    {
+      "label": "character",
+      "caption": "The girl in the white hoodie on the left, spotting the cat with wide sparkling eyes, holding her smartphone up excitedly.",
+      "bbox": [80, 304, 368, 608]
+    },
+    {
+      "label": "text",
+      "caption": "White oval speech bubble with a thin black outline and a tail pointing to the girl, containing black Japanese manga lettering.",
+      "text": "いた…！",
+      "bbox": [96, 216, 336, 304]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 2 (development): a rectangular manga panel with a thick black border. Closer view of the same concrete wall; the orange tabby cat is curled up, eyes half closed, on the right.",
+      "bbox": [48, 656, 720, 1088]
+    },
+    {
+      "label": "character",
+      "caption": "The girl tiptoeing toward the cat in an exaggerated sneaking pose, crouched low, phone held out in front with both hands, small sweat drop near her head.",
+      "bbox": [96, 752, 432, 1072]
+    },
+    {
+      "label": "text",
+      "caption": "Small white speech bubble with a dotted outline indicating whispering, containing black Japanese manga lettering.",
+      "text": "そーっと…",
+      "bbox": [96, 680, 368, 760]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 3 (twist): a rectangular manga panel with a thick black border, dramatic radial speed lines in the background.",
+      "bbox": [48, 1120, 720, 1552]
+    },
+    {
+      "label": "character",
+      "caption": "The orange tabby cat leaping through the air toward the girl, legs spread, while the girl recoils in shock with a startled face, phone nearly slipping from her hand.",
+      "bbox": [112, 1200, 656, 1536]
+    },
+    {
+      "label": "text",
+      "caption": "Large spiky shout-style speech bubble with a jagged black outline, containing bold black Japanese manga lettering.",
+      "text": "えっ!?",
+      "bbox": [448, 1136, 704, 1232]
+    },
+    {
+      "label": "object",
+      "caption": "Panel 4 (punchline): a rectangular manga panel with a thick black border, plain light background with a few sparkle accents.",
+      "bbox": [48, 1584, 720, 2016]
+    },
+    {
+      "label": "character",
+      "caption": "Front-facing selfie composition: the girl holds her phone toward the viewer with a deadpan, slightly defeated expression, while the orange tabby cat sits contentedly on top of her head, looking straight at the camera.",
+      "bbox": [176, 1632, 592, 2000]
+    },
+    {
+      "label": "text",
+      "caption": "Small white speech bubble with a thin black outline near the girl, containing black Japanese manga lettering.",
+      "text": "…撮れた",
+      "bbox": [480, 1608, 704, 1688]
+    }
+  ]
+}
