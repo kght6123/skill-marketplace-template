@@ -29,7 +29,7 @@
       "name": "minimax-h3-prompt-craft",
       "source": "./plugins/minimax-h3-prompt-craft",
       "category": "creative",
-      "description": "MiniMax H3（音声付き動画生成モデル）向けのプロンプトを新規作成・改良するスキル"
+      "description": "MiniMax H3（Hailuo 3。映像とステレオ音声を同時生成する動画生成モデル）向けの構造化プロンプトを新規作成・変換・修正するスキル"
     },
     {
       "name": "wan22-prompt-craft",
