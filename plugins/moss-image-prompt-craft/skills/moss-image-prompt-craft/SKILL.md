@@ -1,6 +1,6 @@
 ---
 name: moss-image-prompt-craft
-description: MOSS-Image（OpenMOSS製5B DiT画像生成モデル）のプロンプトを作成・改善するスキル。「MOSSのプロンプトを書いて」「MOSS-Image用に直して」「文字入りポスターをMOSSで」「レイアウトJSONを作って」などで使う。キャプション/タグ/Layout JSONと推奨設定・ネガティブを出力。
+description: MOSS-Image（OpenMOSS製5B DiT画像生成モデル）のプロンプトを作成・改善するスキル。「MOSSのプロンプトを書いて」「MOSS-Image用に直して」「文字入りポスターをMOSSで」「レイアウトJSONを作って」「MOSSで4コマ漫画」などで使う。キャプション/タグ/Layout JSONと推奨設定・ネガティブを出力。
 ---
 
 # MOSS-Image プロンプトクラフト
@@ -68,6 +68,10 @@ python3 -I <このスキルのディレクトリ>/scripts/compile_prompt.py draf
 5. 出力を読み返し、被写体・文字列・配置・キャンバスサイズを確認する。文字量が箱に収まらないなら箱を広げるか構図を組み直す（文字を勝手に削らない）
 
 Layout は実験的機能。自然文と組み合わせることもできる。
+
+### 4コマ漫画・複数コマ
+
+4コマ漫画や複数コマの漫画を頼まれたら、`references/four-koma.md` を読み、`templates/four-koma-draft.json`（768×2048・縦4コマの完成例）をコピーして書き換える。先に起承転結を1コマ1行で決めてから JSON にする（話の骨組みを決めずに絵を並べるとオチが弱くなるため）。
 
 ## 5. 推奨生成設定（毎回添える）
 
