@@ -32,6 +32,12 @@
       "description": "MiniMax H3（Hailuo 3。映像とステレオ音声を同時生成する動画生成モデル）向けの構造化プロンプトを新規作成・変換・修正するスキル"
     },
     {
+      "name": "minimax-h3-image-prompt-craft",
+      "source": "./plugins/minimax-h3-image-prompt-craft",
+      "category": "creative",
+      "description": "MiniMax-H3-Image（MiniMax H3ファミリーの16MP画像生成・編集モデル）向けのプロンプトを新規作成・改善・変換するスキル"
+    },
+    {
       "name": "wan22-prompt-craft",
       "source": "./plugins/wan22-prompt-craft",
       "category": "creative",

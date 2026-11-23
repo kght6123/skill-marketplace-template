@@ -1,0 +1,14 @@
+MiniMax-H3-Image is licensed under the MiniMax-H3-Image Community License Agreement, Copyright © 2026 MiniMax. All Rights Reserved.
+
+This skill bundles files from MiniMax-AI/MiniMax-H3-Image
+(https://github.com/MiniMax-AI/MiniMax-H3-Image, commit 40850901ab938303b5274122b5f305ebc5b75c80).
+The license is included as LICENSE.upstream.
+
+- references/t2i-en.txt, references/edit-en.txt
+  (from skills/h3-image-prompt-writing/references/, unmodified)
+
+SKILL.md is an original Japanese write-up based on the upstream skill
+(skills/h3-image-prompt-writing/SKILL.md), README and references. It is a
+modified work: the text was translated, restructured and extended with notes
+on ComfyUI and local use. The four examples at the end of SKILL.md are copied
+unmodified from the upstream references.

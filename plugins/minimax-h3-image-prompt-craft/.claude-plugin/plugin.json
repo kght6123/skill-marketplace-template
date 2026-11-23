@@ -1,0 +1,9 @@
+{
+  "name": "minimax-h3-image-prompt-craft",
+  "description": "MiniMax-H3-Image（MiniMax H3ファミリーの16MP画像生成・編集モデル）向けのプロンプトを新規作成・改善・変換するスキル",
+  "version": "1.0.0",
+  "author": {
+    "name": "kght6123",
+    "url": "https://github.com/kght6123"
+  }
+}
