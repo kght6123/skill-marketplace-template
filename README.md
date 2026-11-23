@@ -10,6 +10,7 @@ Claude Code / Copilot CLI / Codex CLI / OpenCode に対応した Agent Skills �
 | [agy-review](./plugins/agy-review/) | agy (Antigravity CLI) を使って変更ファイルのコードレビューを実行するスキル |
 | [anima-prompt-craft](./plugins/anima-prompt-craft/) | Anima（CircleStone Labs × Comfy Org の2Bアニメ特化 text-to-image モデル）向けのプロンプトを新規作成・改良・診断するスキル |
 | [minimax-h3-prompt-craft](./plugins/minimax-h3-prompt-craft/) | MiniMax H3（Hailuo 3。映像とステレオ音声を同時生成する動画生成モデル）向けの構造化プロンプトを新規作成・変換・修正するスキル |
+| [minimax-h3-image-prompt-craft](./plugins/minimax-h3-image-prompt-craft/) | MiniMax-H3-Image（MiniMax H3ファミリーの16MP画像生成・編集モデル）向けのプロンプトを新規作成・改善・変換するスキル。公式のプロンプト作成ガイド（MiniMax-H3-Image Community License）を同梱 |
 | [wan22-prompt-craft](./plugins/wan22-prompt-craft/) | Wan2.2（Alibaba製オープンソース動画/画像生成モデル）向けのプロンプトを新規作成・修正・改善するスキル |
 | [moss-image-prompt-craft](./plugins/moss-image-prompt-craft/) | MOSS-Image（OpenMOSS製5B DiT画像生成モデル）向けのプロンプト（キャプション／タグ列／Layout JSON）と推奨設定を作成・改善するスキル。公式の座標変換スクリプト（Apache-2.0）を同梱 |
 | [sdxl-original-character-prompt-craft](./plugins/sdxl-original-character-prompt-craft/) | 特定のオリジナルキャラクター向けにSDXL用プロンプト（ポジティブ＋ネガティブ）を生成・改良するスキル |
