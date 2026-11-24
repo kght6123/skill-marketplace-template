@@ -7,7 +7,7 @@ description: 漫画に詳しくない人でも、選択肢を選んでいくだ�
 
 ユーザーは漫画に詳しくない。**考えるのは Claude、ユーザーは選ぶだけ**。各ステップで候補を出し、選んでもらって次へ進む。出来上がるのは画像ではなく、モデルに依存しない **漫画の設計書（spec.json）** と、その確認用の **ネーム画像（SVG）** 。生成用のプロンプトは設計書から作る。
 
-現在の対応: **4コマ・8コマ（4コマ×2列）・1ページ・2ページ** ／ 出力先 **MOSS-Image**。MiniMax-H3-Image・H3 への出力はまだない。頼まれたらそう伝え、MOSS 用で作るか聞く。2ページにまたがる大ゴマ（見開きの1枚絵）は、ページごとに生成するため作れない。
+現在の対応: **4コマ・8コマ（4コマ×2列）・1ページ・2ページ** ／ 出力先 **MOSS-Image**。MiniMax-H3-Image・H3 への出力はまだない。頼まれたらそう伝え、MOSS 用で作るか聞く。2ページは横長の1枚（2304×1632）で生成し、あとで中央で左右に切る。
 
 ## 選択肢の出し方
 
@@ -35,7 +35,7 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 | 4コマ（`yonkoma`） | `yonkoma-title` 縦・タイトルあり（迷ったらこれ）／`yonkoma-plain` 縦・タイトルなし／`yonkoma-slim` 細長 |
 | 8コマ（`hachikoma`） | `hachikoma-title` 2列・列ごとにタイトル／`hachikoma-plain` 2列・タイトルなし |
 | 1ページ（`page`） | `page-basic-6` 基本の6コマ（迷ったらこれ）／`page-big-ending-5` オチが大ゴマ／`page-big-opening-5` 最初が大ゴマ／`page-tall-5` 縦長ゴマあり |
-| 2ページ（`spread`） | `spread-open-end-10` 最初とオチが大ゴマ（迷ったらこれ）／`spread-basic-end-11` 基本の6コマ＋オチが大ゴマ／`spread-tall-end-10` 縦長ゴマで始めてオチが大ゴマ |
+| 2ページ（`spread`） | `spread-open-end-10` 最初とオチが大ゴマ（迷ったらこれ）／`spread-basic-end-11` 基本の6コマ＋オチが大ゴマ／`spread-tall-end-10` 縦長ゴマで始めてオチが大ゴマ／`spread-climax-8` 2ページにまたがる大ゴマ（見開き専用） |
 
 8コマは、さらに「2本立て（別々の4コマを2本）」か「前後編（1本目のオチが2本目の起になる）」かを聞く（`story-structures.md` §6）。
 
@@ -94,7 +94,14 @@ python3 -I <このスキルのディレクトリ>/scripts/manga_layout.py moss s
 npx skills add kght6123/skill-marketplace-template --skill moss-image-prompt-craft
 ```
 
-2ページでは `moss-draft-p1.json` と `moss-draft-p2.json` の2つができる。ページごとに別々にコンパイルして生成する。2枚でキャラの見た目をそろえるため、シードと設定は同じにし、`look_en` は変えない。ネームでは1ページ目が右に並ぶ（日本の本の見開きと同じ）。
+2ページは、2ページ分を横長の1枚（2304×1632）として生成する。1枚で生成するので、ページの間でキャラの見た目がずれにくい。生成した画像を中央で左右に切り、**右半分を1ページ目、左半分を2ページ目** にする（どちらも 1152×1632、普通の漫画のページと同じ縦横比）。ネームの赤い点線が切る位置。切るコマンドの例（ffmpeg）:
+
+```bash
+ffmpeg -i spread.png -vf "crop=iw/2:ih:iw/2:0" page1.png
+ffmpeg -i spread.png -vf "crop=iw/2:ih:0:0" page2.png
+```
+
+`spread-climax-8` の下半分の大ゴマは、切ると2ページに分かれる（本の見開きと同じ）。
 
 コマ割り・台詞・演出を直すときは、`moss-draft.json` ではなく **spec.json を直して Step 6 から再実行** する（座標はスクリプトが毎回計算し直す）。
 

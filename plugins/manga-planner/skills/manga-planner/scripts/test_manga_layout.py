@@ -43,15 +43,23 @@ class LayoutTemplateTests(unittest.TestCase):
                 self.assertEqual(W % 16, 0)
                 self.assertEqual(H % 16, 0)
                 self.assertLessEqual(W * H, 4 * 1024 * 1024)  # MOSS の上限 4M 画素
+                boxes = [b for page in lay["pages"] for b in page["panels"] + page["titles"]]
+                for x0, y0, x1, y1 in boxes:
+                    self.assertTrue(0 <= x0 < x1 <= W and 0 <= y0 < y1 <= H)
+                for i, a in enumerate(boxes):
+                    for b in boxes[i + 1:]:
+                        overlap = a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+                        self.assertFalse(overlap, (a, b))
                 for page in lay["pages"]:
-                    boxes = page["panels"] + page["titles"]
-                    for x0, y0, x1, y1 in boxes:
-                        self.assertTrue(0 <= x0 < x1 <= W and 0 <= y0 < y1 <= H)
-                    for i, a in enumerate(boxes):
-                        for b in boxes[i + 1:]:
-                            overlap = a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
-                            self.assertFalse(overlap, (a, b))
                     self.assertTrue(reading_order_ok(page["panels"], lay["reading"]))
+                if lay.get("fold"):
+                    mid = W / 2
+                    for pi, page in enumerate(lay["pages"]):
+                        for b in page["panels"]:
+                            if b[0] < mid < b[2]:
+                                continue  # ページをまたぐ大ゴマ
+                            # 1ページ目は右半分、2ページ目は左半分
+                            self.assertTrue(b[0] >= mid if pi == 0 else b[2] <= mid, (name, b))
                 roles = M.FORMATS[lay["format"]]["roles"]
                 if isinstance(roles, list):
                     self.assertEqual(len(M.panel_boxes(lay)), len(roles))
@@ -166,12 +174,11 @@ class HachikomaTests(unittest.TestCase):
         self.assertGreater(placed[0]["bbox"][0], placed[4]["bbox"][2])
 
     def test_moss_draft_titles_and_caption(self):
-        drafts = M.moss_drafts(self.spec, self.layouts)
-        self.assertEqual(len(drafts), 1)
-        texts = [i["text"] for i in drafts[0]["items"] if i["label"] == "text"]
+        draft = M.moss_draft(self.spec, self.layouts)
+        texts = [i["text"] for i in draft["items"] if i["label"] == "text"]
         self.assertEqual(texts[:2], ["オンライン会議", "昼休み"])
-        self.assertIn("right strip first", drafts[0]["summary"]["caption"])
-        self.assertEqual(sum(1 for i in drafts[0]["items"] if i["label"] == "object"), 8)
+        self.assertIn("right strip first", draft["summary"]["caption"])
+        self.assertEqual(sum(1 for i in draft["items"] if i["label"] == "object"), 8)
 
 
 class PageTests(unittest.TestCase):
@@ -214,7 +221,7 @@ class PageTests(unittest.TestCase):
         self.assertTrue(any("6 コマ必要" in e for e in errors))
 
     def test_moss_caption_describes_page(self):
-        draft = M.moss_drafts(self.spec, self.layouts)[0]
+        draft = M.moss_draft(self.spec, self.layouts)
         self.assertIn("single Japanese manga page with 5 panels", draft["summary"]["caption"])
         self.assertEqual((draft["width"], draft["height"]), (1440, 2032))
 
@@ -249,20 +256,32 @@ class SpreadTests(unittest.TestCase):
             p["role"] = "ketsu"
         self.assertTrue(any("見開き" in w for w in self.warnings()))
 
-    def test_one_draft_per_page(self):
-        drafts = M.moss_drafts(self.spec, self.layouts)
-        self.assertEqual(len(drafts), 2)
-        self.assertTrue(drafts[1]["summary"]["caption"].startswith("Page 2 of a two-page"))
-        objects = [sum(1 for i in d["items"] if i["label"] == "object") for d in drafts]
-        self.assertEqual(objects, [5, 5])
-        self.assertIn("Panel 1 (", [i for i in drafts[1]["items"] if i["label"] == "object"][0]["caption"])
+    def test_one_wide_draft_with_both_pages(self):
+        draft = M.moss_draft(self.spec, self.layouts)
+        self.assertEqual((draft["width"], draft["height"]), (2304, 1632))
+        self.assertIn("right half is page 1", draft["summary"]["caption"])
+        objects = [i for i in draft["items"] if i["label"] == "object"]
+        self.assertEqual(len(objects), 10)
+        self.assertGreaterEqual(objects[0]["bbox"][0], 1152)  # 1コマ目は右ページ
+        self.assertLessEqual(objects[5]["bbox"][2], 1152)     # 6コマ目は左ページ
 
-    def test_output_paths_and_preview(self):
-        paths = M.page_paths("out/moss-draft.json", 2)
-        self.assertEqual([p.name for p in paths], ["moss-draft-p1.json", "moss-draft-p2.json"])
+    def test_spanning_panel_needs_spread_mode(self):
+        self.spec["layout"] = "spread-climax-8"
+        self.spec["panels"] = self.spec["panels"][:3] + self.spec["panels"][5:]
+        roles = ["ki", "ki", "sho", "ten", "ten", "ten", "ketsu", "ketsu"]
+        for p, r in zip(self.spec["panels"], roles):
+            p["role"] = r
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("ページをまたぐコマ" in e for e in errors))
+        self.spec["page_turn"] = "spread"
+        self.assertEqual(M.check(self.spec, self.layouts)[0], [])
+        draft = M.moss_draft(self.spec, self.layouts)
+        self.assertIn("spans across both pages", draft["summary"]["caption"])
+
+    def test_preview_shows_fold(self):
         svg = M.preview_svg(self.spec, self.layouts)
         self.assertIn("p1（めくり前）", svg)
-        self.assertIn('width="2928"', svg)
+        self.assertIn('x1="1152"', svg)
 
 
 class OutputTests(unittest.TestCase):
@@ -271,7 +290,7 @@ class OutputTests(unittest.TestCase):
         self.spec = load_example()
 
     def test_moss_draft_keeps_dialogue_verbatim(self):
-        draft = M.moss_drafts(self.spec, self.layouts)[0]
+        draft = M.moss_draft(self.spec, self.layouts)
         texts = [i["text"] for i in draft["items"] if i["label"] == "text"]
         for p in self.spec["panels"]:
             for b in p.get("balloons", []):
@@ -286,10 +305,9 @@ class OutputTests(unittest.TestCase):
         spec.loader.exec_module(compiler)
         for name in sorted(EXAMPLES.glob("*.spec.json")):
             spec = json.loads(name.read_text(encoding="utf-8"))
-            for draft in M.moss_drafts(spec, self.layouts):
-                with self.subTest(example=name.name):
-                    result = json.loads(compiler.compile_prompt(draft))
-                    self.assertEqual(result["bbox_format"], "yxyx")
+            with self.subTest(example=name.name):
+                result = json.loads(compiler.compile_prompt(M.moss_draft(spec, self.layouts)))
+                self.assertEqual(result["bbox_format"], "yxyx")
 
     def test_preview_escapes_text(self):
         self.spec["panels"][0]["balloons"][0]["text"] = "<&>"

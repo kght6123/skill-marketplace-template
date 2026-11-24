@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1440" height="2032" viewBox="0 0 1440 2032" font-family="Hiragino Sans, 'Noto Sans JP', 'Yu Gothic', sans-serif">
-<rect width="1440" height="2032" fill="#ddd"/>
-<g transform="translate(0,0)"><rect width="1440" height="2032" fill="#fff"/>
+<rect width="1440" height="2032" fill="#fff"/>
 <rect x="730" y="64" width="646" height="520" fill="none" stroke="#000" stroke-width="6"/>
 <rect x="751" y="180" width="604" height="383" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
 <text x="1053" y="206" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">サキ</text>
@@ -45,5 +44,4 @@
 <text x="1118" y="1298" font-size="56" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">香ばしいね</text>
 <rect x="67" y="1934" width="1306" height="31" fill="#fff" fill-opacity="0.85"/>
 <text x="76" y="1950" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">5 結｜medium / eye-level｜黒こげのオムライスを、同居人がおいしそうに食べる</text>
-</g>
 </svg>

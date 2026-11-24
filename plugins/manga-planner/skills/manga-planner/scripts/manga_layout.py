@@ -8,7 +8,7 @@
 
 標準ライブラリだけで動く。コマの位置は assets/layouts.json のテンプレートから決め、
 吹き出しとキャラの箱はこのスクリプトが日本式の読み順（右→左、上→下）で配置する。
-ページが複数あるレイアウトでは、moss は1ページ1ファイル（-p1, -p2 …）を書き出す。
+2ページは1枚の横長の画像として設計し、生成後に中央で左右に切る（右半分が1ページ目）。
 """
 import argparse
 import json
@@ -239,6 +239,9 @@ def check(spec, layouts):
                 warnings.extend(big_panel_warnings([panels[k] for k in idx], [boxes[k] for k in idx], idx[0]))
         if fmt == "spread":
             warnings.extend(page_turn_warnings(spec, panels, boxes))
+            if spec.get("page_turn", "spread") == "turn" and spanning_panels(layout):
+                errors.append(f"spec: layout '{layout_id}' にはページをまたぐコマがあるので、"
+                              "page_turn は spread（見開き）にしてください（めくりでは2ページが同時に見えません）")
 
     if not errors and layout:
         try:
@@ -263,6 +266,14 @@ def direction_warnings(panels):
                 warnings.append(f"{i + 1}コマ目（転の最初）が直前のコマと同じショット・アングルです。"
                                 "絵を大きく変えると意外さが伝わります")
     return warnings
+
+
+def spanning_panels(layout):
+    """折り目（中央）をまたぐコマの番号のリスト。"""
+    if not layout.get("fold"):
+        return []
+    mid = layout["width"] / 2
+    return [i for i, (_, b) in enumerate(panel_boxes(layout)) if b[0] < mid < b[2]]
 
 
 def page_turn_warnings(spec, panels, boxes):
@@ -372,8 +383,8 @@ BALLOON_CAPTION = {
 }
 
 
-def page_description(fmt, layout, page_index, n_titles):
-    """summary.caption の最初の文（ページの体裁と読み順）。"""
+def canvas_description(fmt, layout, n_titles):
+    """summary.caption の最初の文（画像全体の体裁と読み順）。"""
     if fmt == "yonkoma":
         return ("A vertical four-panel Japanese yonkoma comic strip on a white page"
                 + (", with a short title at the top and" if n_titles else ", with")
@@ -384,54 +395,59 @@ def page_description(fmt, layout, page_index, n_titles):
                 + (", each with a short title at the top" if n_titles else "")
                 + ", eight equal panels in total separated by clean white gutters. "
                 "Read the right strip first from top to bottom, then the left strip from top to bottom.")
-    if fmt in ("page", "spread"):
-        n = len(layout["pages"][page_index]["panels"])
-        lead = (f"Page {page_index + 1} of a two-page Japanese manga story. " if fmt == "spread" else "")
-        return (lead + f"A single Japanese manga page with {n} panels of varied sizes separated by clean white gutters, "
+    if fmt == "page":
+        n = len(panel_boxes(layout))
+        return (f"A single Japanese manga page with {n} panels of varied sizes separated by clean white gutters, "
                 "with wider gutters between rows. Panels read right to left within a row, rows top to bottom.")
+    if fmt == "spread":
+        span = (" One large panel spans across both pages, crossing the center fold."
+                if spanning_panels(layout) else
+                " No panel crosses the center fold.")
+        return ("A two-page Japanese manga spread drawn as one wide image: the right half is page 1 and "
+                "the left half is page 2, divided by a white vertical gutter at the center fold, "
+                "each page with its own white margins and panels of varied sizes." + span +
+                " Read the right page first, then the left page; within each page, panels read right to left "
+                "within a row and rows top to bottom.")
     raise SpecError(f"format '{fmt}' の説明文がありません")
 
 
-def moss_drafts(spec, layouts):
-    """ページごとの MOSS 編集用ドラフトのリストを返す。"""
+META = {
+    "yonkoma": ["yonkoma", "4-panel manga", "comic strip", "manga"],
+    "hachikoma": ["yonkoma", "4-panel manga", "comic strip", "manga"],
+    "page": ["manga", "manga page", "comic"],
+    "spread": ["manga", "two-page spread", "comic"],
+}
+
+
+def moss_draft(spec, layouts):
+    """MOSS の編集用ドラフトを返す。2ページも1枚の画像として作り、生成後に中央で切る。"""
     layout = layouts[spec["layout"]]
     placed = place(spec, layout)
     titles = titles_of(spec, layout)
-    slots = title_slots(layout)
     color = spec.get("color", "monochrome")
     looks = "; ".join(c["look_en"].rstrip(".") for c in spec["characters"])
-    meta = {"yonkoma": ["yonkoma", "4-panel manga", "comic strip", "manga"],
-            "hachikoma": ["yonkoma", "4-panel manga", "comic strip", "manga"],
-            "page": ["manga", "manga page", "comic"],
-            "spread": ["manga", "manga page", "comic"]}.get(spec["format"], ["manga"])
-    meta = list(meta) + (["full color"] if color == "full-color" else [])
-
-    drafts = []
-    for pi, _page in enumerate(layout["pages"]):
-        page_titles = [(box, text) for (tp, box), text in zip(slots, titles) if tp == pi]
-        caption = (
-            f"{page_description(spec['format'], layout, pi, len(page_titles))} "
-            f"{spec['style_en'].rstrip('.')}. "
-            f"{'Black and white with gray screentone' if color == 'monochrome' else 'Full color'}. "
-            f"Consistent character design across all panels: {looks}. "
-            f"Speech bubbles are white with thin black outlines, "
-            f"contain short Japanese manga lettering and read from right to left within each panel."
-        )
-        items = []
-        for box, text in page_titles:
-            items.append({"label": "text",
-                          "caption": "Bold black Japanese comic title lettering, centered, with no backing panel.",
-                          "text": text, "bbox": box})
-        page_panels = [pl for pl in placed if pl["page"] == pi]
-        for n, pl in enumerate(page_panels, 1):
-            items.extend(panel_items(n, pl))
-        drafts.append({
-            "width": layout["width"], "height": layout["height"],
-            "bbox_coord_space": "abs", "bbox_format": "xyxy",
-            "summary": {"meta": meta, "canvas": "multi_panel", "caption": caption},
-            "items": items,
-        })
-    return drafts
+    meta = list(META.get(spec["format"], ["manga"])) + (["full color"] if color == "full-color" else [])
+    caption = (
+        f"{canvas_description(spec['format'], layout, len(titles))} "
+        f"{spec['style_en'].rstrip('.')}. "
+        f"{'Black and white with gray screentone' if color == 'monochrome' else 'Full color'}. "
+        f"Consistent character design across all panels: {looks}. "
+        f"Speech bubbles are white with thin black outlines, "
+        f"contain short Japanese manga lettering and read from right to left within each panel."
+    )
+    items = []
+    for (_, box), text in zip(title_slots(layout), titles):
+        items.append({"label": "text",
+                      "caption": "Bold black Japanese comic title lettering, centered, with no backing panel.",
+                      "text": text, "bbox": box})
+    for pl in placed:
+        items.extend(panel_items(pl["index"] + 1, pl))
+    return {
+        "width": layout["width"], "height": layout["height"],
+        "bbox_coord_space": "abs", "bbox_format": "xyxy",
+        "summary": {"meta": meta, "canvas": "multi_panel", "caption": caption},
+        "items": items,
+    }
 
 
 def panel_items(n, pl):
@@ -470,9 +486,6 @@ def panel_items(n, pl):
 
 # ---------------------------------------------------------------- ネーム（SVG）
 
-PAGE_GAP = 48
-
-
 def svg_text(x, y, text, size, anchor="middle", weight="normal", fill="#000"):
     lines = text.split("\n")
     start = y - (len(lines) - 1) * size * 0.65
@@ -484,39 +497,27 @@ def svg_text(x, y, text, size, anchor="middle", weight="normal", fill="#000"):
     return "".join(out)
 
 
-def page_offsets(layout):
-    """ページの左上 x 座標。日本の本なので1ページ目を右に置く。"""
-    n = len(layout["pages"])
-    W = layout["width"]
-    return [(n - 1 - pi) * (W + PAGE_GAP) for pi in range(n)]
-
-
 def preview_svg(spec, layouts):
     layout = layouts[spec["layout"]]
     placed = place(spec, layout)
     titles = titles_of(spec, layout)
-    offs = page_offsets(layout)
-    n = len(layout["pages"])
     W, H = layout["width"], layout["height"]
-    TW = n * W + (n - 1) * PAGE_GAP
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{TW}" height="{H}" viewBox="0 0 {TW} {H}" '
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" '
            f'font-family="Hiragino Sans, \'Noto Sans JP\', \'Yu Gothic\', sans-serif">',
-           f'<rect width="{TW}" height="{H}" fill="#ddd"/>']
-    for pi in range(n):
-        out.append(f'<g transform="translate({offs[pi]},0)"><rect width="{W}" height="{H}" fill="#fff"/>')
-        if n > 1:
-            mode = PAGE_TURNS.get(spec.get("page_turn", "spread"), "")
+           f'<rect width="{W}" height="{H}" fill="#fff"/>']
+    if layout.get("fold"):
+        mid = W // 2
+        out.append(f'<line x1="{mid}" y1="0" x2="{mid}" y2="{H}" stroke="#e74c3c" stroke-width="2" stroke-dasharray="14 10"/>')
+        mode = PAGE_TURNS.get(spec.get("page_turn", "spread"), "")
+        for pi, right in ((0, W - 16), (1, mid - 16)):
             side = "右ページ" if pi == 0 else "左ページ"
             note = f"p{pi + 1}（{side}・{mode}）" if mode == "見開き" else f"p{pi + 1}（{mode}{'前' if pi == 0 else '後'}）"
-            out.append(svg_text(W - 16, 32, note, 22, anchor="end", fill="#999"))
-        for (tp, box), text in zip(title_slots(layout), titles):
-            if tp == pi:
-                x0, y0, x1, y1 = box
-                out.append(svg_text((x0 + x1) / 2, (y0 + y1) / 2, text, round((y1 - y0) * 0.5), weight="bold"))
-        for pl in placed:
-            if pl["page"] == pi:
-                out.extend(panel_svg(pl))
-        out.append("</g>")
+            out.append(svg_text(right, 22, note, 20, anchor="end", fill="#999"))
+    for (_, box), text in zip(title_slots(layout), titles):
+        x0, y0, x1, y1 = box
+        out.append(svg_text((x0 + x1) / 2, (y0 + y1) / 2, text, round((y1 - y0) * 0.5), weight="bold"))
+    for pl in placed:
+        out.extend(panel_svg(pl))
     out.append("</svg>")
     return "\n".join(out)
 
@@ -559,13 +560,6 @@ def panel_svg(pl):
 
 # ---------------------------------------------------------------- CLI
 
-def page_paths(output, n):
-    if n == 1:
-        return [Path(output)]
-    p = Path(output)
-    return [p.with_name(f"{p.stem}-p{k + 1}{p.suffix}") for k in range(n)]
-
-
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["check", "preview", "moss"])
@@ -589,24 +583,13 @@ def main(argv=None):
 
     if args.command == "preview":
         data = preview_svg(spec, layouts)
-        if args.output:
-            Path(args.output).write_text(data, encoding="utf-8")
-            print(args.output)
-        else:
-            sys.stdout.write(data)
-        return 0
-
-    drafts = moss_drafts(spec, layouts)
-    texts = [json.dumps(d, ensure_ascii=False, indent=2) + "\n" for d in drafts]
-    if args.output:
-        for path, text in zip(page_paths(args.output, len(texts)), texts):
-            path.write_text(text, encoding="utf-8")
-            print(path)
-    elif len(texts) == 1:
-        sys.stdout.write(texts[0])
     else:
-        print("エラー: ページが複数あるので --output を指定してください", file=sys.stderr)
-        return 1
+        data = json.dumps(moss_draft(spec, layouts), ensure_ascii=False, indent=2) + "\n"
+    if args.output:
+        Path(args.output).write_text(data, encoding="utf-8")
+        print(args.output)
+    else:
+        sys.stdout.write(data)
     return 0
 
 
