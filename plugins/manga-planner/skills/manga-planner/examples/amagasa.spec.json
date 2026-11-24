@@ -1,0 +1,146 @@
+{
+  "format": "spread",
+  "layout": "spread-open-end-10",
+  "page_turn": "turn",
+  "genre": "romcom",
+  "ending": "wholesome",
+  "color": "monochrome",
+  "style_en": "Clean black ink line art with soft gray screentone shading, gentle shoujo manga style",
+  "characters": [
+    {
+      "id": "aoi",
+      "name": "アオイ",
+      "look_ja": "黒髪ロング、ベージュのトレンチコート",
+      "look_en": "a young woman with long straight black hair and a beige trench coat"
+    },
+    {
+      "id": "sota",
+      "name": "ソウタ",
+      "look_ja": "茶髪の短髪、紺のスーツ、黒い傘",
+      "look_en": "a young man with short brown hair, a navy suit and a black umbrella"
+    }
+  ],
+  "panels": [
+    {
+      "role": "ki",
+      "beat_ja": "駅前で急な雨。立ち止まる",
+      "shot": "long",
+      "angle": "high",
+      "background_en": "A busy station entrance in sudden heavy rain, people hurrying with umbrellas, wet pavement reflecting lights",
+      "cast": [
+        {"id": "aoi", "acting_en": "standing under the station roof, looking up at the rain in dismay", "acting_ja": "雨を見上げて困る"}
+      ],
+      "balloons": [{"speaker": "aoi", "type": "normal", "text": "うそ、雨…"}]
+    },
+    {
+      "role": "ki",
+      "beat_ja": "カバンを探しても傘がない",
+      "shot": "medium",
+      "angle": "eye-level",
+      "background_en": "The station entrance with rain falling behind",
+      "cast": [
+        {"id": "aoi", "acting_en": "digging through her handbag with a worried face", "acting_ja": "カバンを探る"}
+      ],
+      "balloons": [{"speaker": "aoi", "type": "normal", "text": "傘…ない"}]
+    },
+    {
+      "role": "sho",
+      "beat_ja": "隣の男性が傘を差し出す",
+      "shot": "medium",
+      "angle": "eye-level",
+      "background_en": "The station entrance with rain falling behind",
+      "cast": [
+        {"id": "sota", "acting_en": "holding out his closed black umbrella toward her with a shy smile", "acting_ja": "傘を差し出す"},
+        {"id": "aoi", "acting_en": "turning toward him in surprise", "acting_ja": "驚いて振り向く"}
+      ],
+      "balloons": [{"speaker": "sota", "type": "normal", "text": "よかったら"}]
+    },
+    {
+      "role": "sho",
+      "beat_ja": "思わず照れる",
+      "shot": "closeup",
+      "angle": "eye-level",
+      "background_en": "Soft sparkling background",
+      "cast": [
+        {"id": "aoi", "acting_en": "blushing with wide eyes, hand near her mouth", "acting_ja": "照れる"}
+      ],
+      "balloons": [{"speaker": "aoi", "type": "thought", "text": "えっ…"}],
+      "sfx": [{"text": "ドキッ"}]
+    },
+    {
+      "role": "sho",
+      "beat_ja": "傘に入れてもらい、歩き出そうとする（引き）",
+      "shot": "full",
+      "angle": "eye-level",
+      "background_en": "Stepping out from the station roof into the rain",
+      "cast": [
+        {"id": "sota", "acting_en": "about to open the umbrella with a confident face", "acting_ja": "傘を開こうとする"},
+        {"id": "aoi", "acting_en": "standing close beside him, nodding shyly", "acting_ja": "うなずく"}
+      ],
+      "balloons": [
+        {"speaker": "sota", "type": "normal", "text": "駅まで一緒に"},
+        {"speaker": "aoi", "type": "whisper", "text": "はい…"}
+      ]
+    },
+    {
+      "role": "ten",
+      "beat_ja": "開いた傘が穴だらけ",
+      "shot": "closeup",
+      "angle": "low",
+      "background_en": "Rain pouring down",
+      "effects_en": "Dramatic radial speed lines",
+      "cast": [
+        {"id": "sota", "acting_en": "holding up an opened umbrella full of big holes, frozen in shock", "acting_ja": "穴だらけの傘に固まる"}
+      ],
+      "balloons": [{"speaker": "sota", "type": "normal", "text": "あ"}],
+      "sfx": [{"text": "バサッ"}]
+    },
+    {
+      "role": "ten",
+      "beat_ja": "二人ともずぶ濡れ",
+      "shot": "full",
+      "angle": "eye-level",
+      "background_en": "Heavy rain soaking the street",
+      "cast": [
+        {"id": "aoi", "acting_en": "soaking wet, hair dripping, staring blankly", "acting_ja": "ずぶ濡れで呆然"},
+        {"id": "sota", "acting_en": "soaking wet, still holding the broken umbrella", "acting_ja": "壊れた傘を持ったまま"}
+      ],
+      "balloons": [{"speaker": "aoi", "type": "shout", "text": "穴だらけ!?"}]
+    },
+    {
+      "role": "ten",
+      "beat_ja": "顔を見合わせる",
+      "shot": "bust",
+      "angle": "over-shoulder",
+      "background_en": "Rain falling",
+      "cast": [
+        {"id": "sota", "acting_en": "looking at her with an apologetic, embarrassed face", "acting_ja": "申し訳なさそう"},
+        {"id": "aoi", "acting_en": "looking back at him silently", "acting_ja": "見つめ返す"}
+      ],
+      "balloons": [{"speaker": "sota", "type": "normal", "text": "ごめん…"}]
+    },
+    {
+      "role": "ketsu",
+      "beat_ja": "思わず笑い出す",
+      "shot": "bust",
+      "angle": "eye-level",
+      "background_en": "Rain falling",
+      "cast": [
+        {"id": "aoi", "acting_en": "bursting into laughter, covering her mouth", "acting_ja": "笑い出す"}
+      ],
+      "balloons": [{"speaker": "aoi", "type": "normal", "text": "ふふっ"}]
+    },
+    {
+      "role": "ketsu",
+      "beat_ja": "二人で笑いながら雨の中を走る",
+      "shot": "long",
+      "angle": "eye-level",
+      "background_en": "A rainy city street at dusk with glowing shop lights and splashing puddles",
+      "cast": [
+        {"id": "sota", "acting_en": "running and laughing, holding the broken umbrella over his head", "acting_ja": "笑いながら走る"},
+        {"id": "aoi", "acting_en": "running beside him, laughing happily", "acting_ja": "一緒に走る"}
+      ],
+      "balloons": [{"speaker": "sota", "type": "normal", "text": "走ろう！"}]
+    }
+  ]
+}

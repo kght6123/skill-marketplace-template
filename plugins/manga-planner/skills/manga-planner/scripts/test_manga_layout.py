@@ -219,6 +219,52 @@ class PageTests(unittest.TestCase):
         self.assertEqual((draft["width"], draft["height"]), (1440, 2032))
 
 
+class SpreadTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+        self.spec = json.loads((EXAMPLES / "amagasa.spec.json").read_text(encoding="utf-8"))
+
+    def warnings(self):
+        errors, warnings = M.check(self.spec, self.layouts)
+        self.assertEqual(errors, [])
+        return warnings
+
+    def test_example_is_valid_without_warnings(self):
+        self.assertEqual(self.warnings(), [])
+
+    def test_page_turn_value(self):
+        self.spec["page_turn"] = "flip"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("page_turn" in e for e in errors))
+
+    def test_turn_wants_twist_after_the_turn(self):
+        self.spec["panels"][5]["role"] = "sho"
+        self.assertTrue(any("めくり" in w for w in self.warnings()))
+
+    def test_spread_hides_punchline_on_first_page(self):
+        self.spec["page_turn"] = "spread"
+        self.assertEqual(self.warnings(), [])
+        self.spec["panels"][3]["role"] = "ten"
+        for p in self.spec["panels"][4:]:
+            p["role"] = "ketsu"
+        self.assertTrue(any("見開き" in w for w in self.warnings()))
+
+    def test_one_draft_per_page(self):
+        drafts = M.moss_drafts(self.spec, self.layouts)
+        self.assertEqual(len(drafts), 2)
+        self.assertTrue(drafts[1]["summary"]["caption"].startswith("Page 2 of a two-page"))
+        objects = [sum(1 for i in d["items"] if i["label"] == "object") for d in drafts]
+        self.assertEqual(objects, [5, 5])
+        self.assertIn("Panel 1 (", [i for i in drafts[1]["items"] if i["label"] == "object"][0]["caption"])
+
+    def test_output_paths_and_preview(self):
+        paths = M.page_paths("out/moss-draft.json", 2)
+        self.assertEqual([p.name for p in paths], ["moss-draft-p1.json", "moss-draft-p2.json"])
+        svg = M.preview_svg(self.spec, self.layouts)
+        self.assertIn("p1（めくり前）", svg)
+        self.assertIn('width="2928"', svg)
+
+
 class OutputTests(unittest.TestCase):
     def setUp(self):
         self.layouts = M.load_layouts()

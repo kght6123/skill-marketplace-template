@@ -24,7 +24,9 @@ FORMATS = {
     "yonkoma": {"roles": KISHOTENKETSU, "label_ja": "4コマ"},
     "hachikoma": {"roles": KISHOTENKETSU * 2, "label_ja": "8コマ（4コマ×2列）"},
     "page": {"roles": "flow", "label_ja": "1ページ"},
+    "spread": {"roles": "flow", "label_ja": "2ページ"},
 }
+PAGE_TURNS = {"spread": "見開き", "turn": "めくり"}
 ROLE_EN = {"ki": "setup", "sho": "development", "ten": "twist", "ketsu": "punchline"}
 ROLE_JA = {"ki": "起", "sho": "承", "ten": "転", "ketsu": "結"}
 SHOT_EN = {
@@ -134,6 +136,8 @@ def check(spec, layouts):
     if layout and fmt and layout["format"] != fmt:
         errors.append(f"spec: layout '{layout_id}' は format '{layout['format']}' 用です")
 
+    if fmt == "spread" and spec.get("page_turn", "spread") not in PAGE_TURNS:
+        errors.append(f"spec: page_turn は {', '.join(PAGE_TURNS)} のどれかにしてください")
     color = spec.get("color", "monochrome")
     if color not in COLORS:
         errors.append(f"spec: color は {sorted(COLORS)} のどれかにしてください")
@@ -230,7 +234,11 @@ def check(spec, layouts):
         errors.extend(role_errors(FORMATS[fmt]["roles"], [p.get("role") for p in panels]))
         warnings.extend(direction_warnings(panels))
         if FORMATS[fmt]["roles"] == "flow":
-            warnings.extend(big_panel_warnings(panels, boxes))
+            for pi in range(len(layout["pages"])):
+                idx = [k for k, (bp, _) in enumerate(boxes) if bp == pi]
+                warnings.extend(big_panel_warnings([panels[k] for k in idx], [boxes[k] for k in idx], idx[0]))
+        if fmt == "spread":
+            warnings.extend(page_turn_warnings(spec, panels, boxes))
 
     if not errors and layout:
         try:
@@ -257,14 +265,27 @@ def direction_warnings(panels):
     return warnings
 
 
-def big_panel_warnings(panels, boxes):
+def page_turn_warnings(spec, panels, boxes):
+    """2ページで、見開き・めくりの効果を生かせているかを見る。"""
+    mode = spec.get("page_turn", "spread")
+    pages = [bp for bp, _ in boxes]
+    first_p2 = pages.index(1)
+    if mode == "turn" and panels[first_p2].get("role") not in ("ten", "ketsu"):
+        return ["めくりの場合、2ページ目の最初のコマに転（意外な展開）を置くと、めくった瞬間に驚かせられます。"
+                "1ページ目の最後は「引き」（続きが気になる場面）にします"]
+    if mode == "spread" and any(p.get("role") == "ketsu" for p in panels[:first_p2]):
+        return ["見開きでは2ページが同時に目に入るので、結（オチ）は2ページ目の最後のコマだけに置くと先に見えにくくなります"]
+    return []
+
+
+def big_panel_warnings(panels, boxes, offset=0):
     """コマの大きさがそろっていないページで、大ゴマを承に使っていないかを見る。"""
     areas = [(b[2] - b[0]) * (b[3] - b[1]) for _, b in boxes]
     if max(areas) < min(areas) * 1.5:
         return []
     big = max(range(len(areas)), key=areas.__getitem__)
     if panels[big].get("role") == "sho":
-        return [f"{big + 1}コマ目は一番大きいコマ（大ゴマ）ですが、役割が承です。"
+        return [f"{big + 1 + offset}コマ目は一番大きいコマ（大ゴマ）ですが、役割が承です。"
                 "大ゴマは起（場所や登場）・転（山場）・結（オチ）に使うと効きます"]
     return []
 
@@ -363,9 +384,10 @@ def page_description(fmt, layout, page_index, n_titles):
                 + (", each with a short title at the top" if n_titles else "")
                 + ", eight equal panels in total separated by clean white gutters. "
                 "Read the right strip first from top to bottom, then the left strip from top to bottom.")
-    if fmt == "page":
+    if fmt in ("page", "spread"):
         n = len(layout["pages"][page_index]["panels"])
-        return (f"A single Japanese manga page with {n} panels of varied sizes separated by clean white gutters, "
+        lead = (f"Page {page_index + 1} of a two-page Japanese manga story. " if fmt == "spread" else "")
+        return (lead + f"A single Japanese manga page with {n} panels of varied sizes separated by clean white gutters, "
                 "with wider gutters between rows. Panels read right to left within a row, rows top to bottom.")
     raise SpecError(f"format '{fmt}' の説明文がありません")
 
@@ -380,7 +402,8 @@ def moss_drafts(spec, layouts):
     looks = "; ".join(c["look_en"].rstrip(".") for c in spec["characters"])
     meta = {"yonkoma": ["yonkoma", "4-panel manga", "comic strip", "manga"],
             "hachikoma": ["yonkoma", "4-panel manga", "comic strip", "manga"],
-            "page": ["manga", "manga page", "comic"]}.get(spec["format"], ["manga"])
+            "page": ["manga", "manga page", "comic"],
+            "spread": ["manga", "manga page", "comic"]}.get(spec["format"], ["manga"])
     meta = list(meta) + (["full color"] if color == "full-color" else [])
 
     drafts = []
@@ -482,7 +505,10 @@ def preview_svg(spec, layouts):
     for pi in range(n):
         out.append(f'<g transform="translate({offs[pi]},0)"><rect width="{W}" height="{H}" fill="#fff"/>')
         if n > 1:
-            out.append(svg_text(W - 16, 24, f"p{pi + 1}", 22, anchor="end", fill="#999"))
+            mode = PAGE_TURNS.get(spec.get("page_turn", "spread"), "")
+            side = "右ページ" if pi == 0 else "左ページ"
+            note = f"p{pi + 1}（{side}・{mode}）" if mode == "見開き" else f"p{pi + 1}（{mode}{'前' if pi == 0 else '後'}）"
+            out.append(svg_text(W - 16, 32, note, 22, anchor="end", fill="#999"))
         for (tp, box), text in zip(title_slots(layout), titles):
             if tp == pi:
                 x0, y0, x1, y1 = box
