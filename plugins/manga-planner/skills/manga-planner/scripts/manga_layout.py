@@ -58,9 +58,38 @@ class SpecError(Exception):
     pass
 
 
+SPREAD_PAGE_W, SPREAD_H = 1152, 1632  # 2ページ（横長1枚）の1ページ分
+
+
 def load_layouts():
+    """layouts.json に、1ページのテンプレートを2つ組み合わせた2ページのテンプレートを足して返す。"""
     with LAYOUTS_PATH.open(encoding="utf-8") as f:
-        return json.load(f)
+        layouts = json.load(f)
+    pages = {k: v for k, v in layouts.items() if v["format"] == "page" and v["width"] != v["height"]}
+    for a, la in pages.items():
+        for b, lb in pages.items():
+            key = f"spread-{a[len('page-'):]}--{b[len('page-'):]}"
+            if key not in layouts:
+                layouts[key] = combine_pages(la, lb)
+    return layouts
+
+
+def combine_pages(la, lb):
+    """1ページのテンプレート2つを、横長1枚の2ページ（右が1ページ目）に縮めて並べる。"""
+    def scale(lay, off):
+        sx, sy = SPREAD_PAGE_W / lay["width"], SPREAD_H / lay["height"]
+        return [[round(x0 * sx) + off, round(y0 * sy), round(x1 * sx) + off, round(y1 * sy)]
+                for x0, y0, x1, y1 in lay["pages"][0]["panels"]]
+    name = lambda lay: lay["label_ja"].replace("1ページ・", "")
+    note = lambda lay: lay["note_ja"].replace("。迷ったらこれ", "")
+    return {
+        "format": "spread", "generated": True,
+        "label_ja": f"2ページ・{name(la)}＋{name(lb)}",
+        "note_ja": f"1ページ目: {note(la)}／2ページ目: {note(lb)}",
+        "width": 2 * SPREAD_PAGE_W, "height": SPREAD_H, "reading": "rows", "fold": True,
+        "pages": [{"titles": [], "panels": scale(la, SPREAD_PAGE_W)},
+                  {"titles": [], "panels": scale(lb, 0)}],
+    }
 
 
 def text_metrics(text):
@@ -385,6 +414,9 @@ BALLOON_CAPTION = {
 
 def canvas_description(fmt, layout, n_titles):
     """summary.caption の最初の文（画像全体の体裁と読み順）。"""
+    if fmt == "yonkoma" and layout["width"] > layout["height"]:
+        return ("A horizontal four-panel Japanese yonkoma comic strip on a white banner, four equal panels "
+                "placed side by side and separated by clean white gutters. Panels read from right to left.")
     if fmt == "yonkoma":
         return ("A vertical four-panel Japanese yonkoma comic strip on a white page"
                 + (", with a short title at the top and" if n_titles else ", with")

@@ -309,6 +309,52 @@ class SpreadTests(unittest.TestCase):
         self.assertIn('x1="1152"', svg)
 
 
+PICK = importlib.util.spec_from_file_location("pick", HERE / "pick.py")
+P = importlib.util.module_from_spec(PICK)
+PICK.loader.exec_module(P)
+
+
+class PickTests(unittest.TestCase):
+    def test_catalog_is_large_enough_and_keys_are_unique(self):
+        rows = P.load_catalog()
+        minimum = {"genre": 12, "ending": 12, "theme": 30, "setting": 15, "twist": 15, "style": 10}
+        for cat, n in minimum.items():
+            keys = [r["key"] for r in rows if r["category"] == cat]
+            with self.subTest(category=cat):
+                self.assertGreaterEqual(len(keys), n)
+                self.assertEqual(len(keys), len(set(keys)))
+        for r in rows:
+            if r["category"] == "style":
+                self.assertTrue(r["en"] and M.is_ascii(r["en"]), r["key"])
+
+    def test_exclude_is_respected(self):
+        keys = [r["key"] for r in P.load_catalog() if r["category"] == "ending"]
+        picked = P.pick_catalog("ending", 99, set(keys[:5]))
+        self.assertEqual(len(picked), len(keys) - 5)
+        self.assertTrue(all(r["key"] not in keys[:5] for r in picked))
+
+    def test_layout_pick_filters_format_and_square(self):
+        rows = P.pick_layouts("page", 99, set(), square=True)
+        self.assertTrue(rows and all(lay["width"] == lay["height"] for _, lay in rows))
+        rows = P.pick_layouts("page", 99, {"page-basic-6"}, square=False)
+        self.assertTrue(all(k != "page-basic-6" and lay["width"] != lay["height"] for k, lay in rows))
+
+    def test_generated_spreads_cover_every_page_pair(self):
+        layouts = M.load_layouts()
+        pages = [k for k, v in layouts.items() if v["format"] == "page" and v["width"] != v["height"]]
+        spreads = [k for k, v in layouts.items() if v.get("generated")]
+        self.assertGreaterEqual(len(pages), 10)
+        self.assertGreaterEqual(len(spreads) + 4, len(pages) ** 2)
+
+    def test_wide_yonkoma_caption_reads_right_to_left(self):
+        spec = load_example()
+        spec["layout"] = "yonkoma-wide"
+        del spec["title"]
+        layouts = M.load_layouts()
+        self.assertEqual(M.check(spec, layouts)[0], [])
+        self.assertIn("read from right to left", M.moss_draft(spec, layouts)["summary"]["caption"])
+
+
 class OutputTests(unittest.TestCase):
     def setUp(self):
         self.layouts = M.load_layouts()
