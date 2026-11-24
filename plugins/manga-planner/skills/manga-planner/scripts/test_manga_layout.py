@@ -233,6 +233,14 @@ class SquarePageTests(unittest.TestCase):
         self.spec["format"] = "page"
         del self.spec["title"]
 
+    def test_sns_template_has_four_square_panels(self):
+        panels = self.layouts["page-square-4"]["pages"][0]["panels"]
+        sizes = {(b[2] - b[0], b[3] - b[1]) for b in panels}
+        self.assertEqual(len(panels), 4)
+        self.assertEqual(len(sizes), 1)
+        w, h = sizes.pop()
+        self.assertEqual(w, h)
+
     def test_four_panel_story_fits_every_square_template(self):
         for name in ("page-square-4", "page-square-big-ending-4", "page-square-big-opening-4"):
             with self.subTest(layout=name):

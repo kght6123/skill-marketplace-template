@@ -25,7 +25,7 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 |---|---|
 | 形式 | 4コマ（迷ったらこれ）／8コマ（4コマ×2列）／1ページ／2ページ |
 
-SNSに載せると言われたら、1ページの正方形のテンプレートをすすめる（タイムラインで切れずに表示される）。
+SNSに載せると言われたら、1ページの `page-square-4`（正方形の画像に正方形のコマ4つ）を最初にすすめる（タイムラインで切れずに表示される）。
 | ジャンル | ギャグ／日常／ラブコメ／解説（ちょっとシリアスは Other で） |
 | オチの型 | ボケ／どんでん返し／ほっこり／ツッコミ（説明は `references/story-structures.md` §2） |
 | 色 | モノクロ＋トーン（王道）／フルカラー |
@@ -36,7 +36,7 @@ SNSに載せると言われたら、1ページの正方形のテンプレート�
 |---|---|
 | 4コマ（`yonkoma`） | `yonkoma-title` 縦・タイトルあり（迷ったらこれ）／`yonkoma-plain` 縦・タイトルなし／`yonkoma-slim` 細長 |
 | 8コマ（`hachikoma`） | `hachikoma-title` 2列・列ごとにタイトル／`hachikoma-plain` 2列・タイトルなし |
-| 1ページ（`page`） | `page-basic-6` 基本の6コマ（迷ったらこれ）／`page-big-ending-5` オチが大ゴマ／`page-big-opening-5` 最初が大ゴマ／`page-tall-5` 縦長ゴマあり／`page-square-4` 正方形・田の字（SNS向け）／`page-square-big-ending-4` 正方形・オチが大ゴマ（SNS向け）／`page-square-big-opening-4` 正方形・最初が大ゴマ（SNS向け） |
+| 1ページ（`page`） | `page-basic-6` 基本の6コマ（迷ったらこれ）／`page-big-ending-5` オチが大ゴマ／`page-big-opening-5` 最初が大ゴマ／`page-tall-5` 縦長ゴマあり／`page-square-4` 正方形・正方形のコマ4つ（SNS向け）／`page-square-big-ending-4` 正方形・オチが大ゴマ（SNS向け）／`page-square-big-opening-4` 正方形・最初が大ゴマ（SNS向け） |
 | 2ページ（`spread`） | `spread-open-end-10` 最初とオチが大ゴマ（迷ったらこれ）／`spread-basic-end-11` 基本の6コマ＋オチが大ゴマ／`spread-tall-end-10` 縦長ゴマで始めてオチが大ゴマ／`spread-climax-8` 2ページにまたがる大ゴマ（見開き専用） |
 
 8コマは、さらに「2本立て（別々の4コマを2本）」か「前後編（1本目のオチが2本目の起になる）」かを聞く（`story-structures.md` §6）。
