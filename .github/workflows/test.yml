@@ -40,4 +40,6 @@ jobs:
       - name: スクリプトのテスト
         run: python3 -I plugins/manga-planner/skills/manga-planner/scripts/test_manga_layout.py
       - name: 作例の検査
-        run: python3 -I plugins/manga-planner/skills/manga-planner/scripts/manga_layout.py check plugins/manga-planner/skills/manga-planner/examples/neko-satsuei.spec.json
+        run: |
+          D=plugins/manga-planner/skills/manga-planner
+          for f in $D/examples/*.spec.json; do python3 -I $D/scripts/manga_layout.py check "$f"; done

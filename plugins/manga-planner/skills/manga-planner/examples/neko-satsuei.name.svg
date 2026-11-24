@@ -1,47 +1,49 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="768" height="2048" viewBox="0 0 768 2048" font-family="Hiragino Sans, 'Noto Sans JP', 'Yu Gothic', sans-serif">
-<rect width="768" height="2048" fill="#fff"/>
-<text x="384.0" y="104" font-size="56" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#000">ねこ撮影</text>
+<rect width="768" height="2048" fill="#ddd"/>
+<g transform="translate(0,0)"><rect width="768" height="2048" fill="#fff"/>
+<text x="384" y="104" font-size="56" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#000">ねこ撮影</text>
 <rect x="48" y="192" width="672" height="432" fill="none" stroke="#000" stroke-width="6"/>
 <rect x="384" y="305" width="319" height="302" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
-<text x="543.5" y="331" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ミナ</text>
-<text x="543.5" y="365" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">目を輝かせてスマホを構える</text>
+<text x="544" y="331" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ミナ</text>
+<text x="544" y="365" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">目を輝かせてスマホを構える</text>
 <rect x="65" y="305" width="319" height="302" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
-<text x="224.5" y="331" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ねこ</text>
-<text x="224.5" y="365" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">塀の上で座っている</text>
+<text x="224" y="331" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ねこ</text>
+<text x="224" y="365" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">塀の上で座っている</text>
 <ellipse cx="602.0" cy="253.0" rx="101.0" ry="44.0" fill="#fff" stroke="#000" stroke-width="2"/>
-<text x="602.0" y="253" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">いた…！</text>
+<text x="602" y="253" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">いた…！</text>
 <rect x="51" y="590" width="666" height="31" fill="#fff" fill-opacity="0.85"/>
 <text x="60" y="606" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">1 起｜long / eye-level｜塀の上の猫を見つけてスマホを構える</text>
 <rect x="48" y="656" width="672" height="432" fill="none" stroke="#000" stroke-width="6"/>
 <rect x="384" y="769" width="319" height="302" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
-<text x="543.5" y="795" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ミナ</text>
-<text x="543.5" y="829" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">忍び足、冷や汗</text>
+<text x="544" y="795" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ミナ</text>
+<text x="544" y="829" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">忍び足、冷や汗</text>
 <rect x="65" y="769" width="319" height="302" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
-<text x="224.5" y="795" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ねこ</text>
-<text x="224.5" y="829" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">うとうと</text>
+<text x="224" y="795" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ねこ</text>
+<text x="224" y="829" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">うとうと</text>
 <ellipse cx="581.0" cy="717.0" rx="122.0" ry="44.0" fill="#fff" stroke="#000" stroke-width="2" stroke-dasharray="6 5"/>
-<text x="581.0" y="717" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">そーっと…</text>
-<text x="172.5" y="928" font-size="31" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#c0392b">ソロ…</text>
+<text x="581" y="717" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">そーっと…</text>
+<text x="172" y="928" font-size="31" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#c0392b">ソロ…</text>
 <rect x="51" y="1054" width="666" height="31" fill="#fff" fill-opacity="0.85"/>
 <text x="60" y="1070" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">2 承｜full / eye-level｜忍び足で近づく</text>
 <rect x="48" y="1120" width="672" height="432" fill="none" stroke="#000" stroke-width="6"/>
 <rect x="384" y="1233" width="319" height="302" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
-<text x="543.5" y="1259" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ミナ</text>
-<text x="543.5" y="1293" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">のけぞって驚く</text>
+<text x="544" y="1259" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ミナ</text>
+<text x="544" y="1293" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">のけぞって驚く</text>
 <rect x="65" y="1233" width="319" height="302" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
-<text x="224.5" y="1259" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ねこ</text>
-<text x="224.5" y="1293" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">飛びかかる</text>
+<text x="224" y="1259" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ねこ</text>
+<text x="224" y="1293" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">飛びかかる</text>
 <ellipse cx="602.0" cy="1181.0" rx="101.0" ry="44.0" fill="#fff" stroke="#000" stroke-width="5"/>
-<text x="602.0" y="1181" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#000">えっ!?</text>
-<text x="172.5" y="1392" font-size="31" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#c0392b">バッ</text>
+<text x="602" y="1181" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#000">えっ!?</text>
+<text x="172" y="1392" font-size="31" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#c0392b">バッ</text>
 <rect x="51" y="1518" width="666" height="31" fill="#fff" fill-opacity="0.85"/>
 <text x="60" y="1534" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">3 転｜medium / low｜猫が飛びかかってくる</text>
 <rect x="48" y="1584" width="672" height="432" fill="none" stroke="#000" stroke-width="6"/>
 <rect x="65" y="1697" width="638" height="302" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
-<text x="384.0" y="1723" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ミナ</text>
-<text x="384.0" y="1757" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">真顔で自撮り（頭に猫）</text>
+<text x="384" y="1723" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ミナ</text>
+<text x="384" y="1757" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">真顔で自撮り（頭に猫）</text>
 <ellipse cx="602.0" cy="1645.0" rx="101.0" ry="44.0" fill="#fff" stroke="#000" stroke-width="2"/>
-<text x="602.0" y="1645" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">…撮れた</text>
+<text x="602" y="1645" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">…撮れた</text>
 <rect x="51" y="1982" width="666" height="31" fill="#fff" fill-opacity="0.85"/>
 <text x="60" y="1998" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">4 結｜bust / eye-level｜頭に猫を乗せたまま自撮り</text>
+</g>
 </svg>

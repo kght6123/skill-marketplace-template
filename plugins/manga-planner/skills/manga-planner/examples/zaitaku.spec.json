@@ -1,0 +1,123 @@
+{
+  "format": "hachikoma",
+  "layout": "hachikoma-title",
+  "title": ["オンライン会議", "昼休み"],
+  "genre": "daily",
+  "ending": "boke",
+  "color": "monochrome",
+  "style_en": "Clean black ink line art with light gray screentone shading, simple expressive faces",
+  "characters": [
+    {
+      "id": "yu",
+      "name": "ユウ",
+      "look_ja": "黒髪の短髪、眼鏡、グレーのスウェット",
+      "look_en": "a young man with short black hair, round glasses and a gray sweatshirt"
+    },
+    {
+      "id": "mochi",
+      "name": "モチ",
+      "look_ja": "まるい白猫",
+      "look_en": "a round fluffy white cat"
+    }
+  ],
+  "panels": [
+    {
+      "role": "ki",
+      "beat_ja": "在宅でオンライン会議を始める",
+      "shot": "medium",
+      "angle": "eye-level",
+      "background_en": "A small home office with a desk, a laptop and a mug",
+      "cast": [
+        {"id": "yu", "acting_en": "sitting at the laptop, adjusting the webcam with a determined face", "acting_ja": "カメラを調整"}
+      ],
+      "balloons": [{"speaker": "yu", "type": "normal", "text": "よし、カメラON"}]
+    },
+    {
+      "role": "sho",
+      "beat_ja": "まじめに発表している",
+      "shot": "bust",
+      "angle": "eye-level",
+      "background_en": "The same home office",
+      "cast": [
+        {"id": "yu", "acting_en": "talking seriously to the laptop screen, one hand raised to explain", "acting_ja": "まじめに説明"}
+      ],
+      "balloons": [{"speaker": "yu", "type": "normal", "text": "本日の議題は…"}]
+    },
+    {
+      "role": "ten",
+      "beat_ja": "猫がキーボードの上を横切る",
+      "shot": "closeup",
+      "angle": "high",
+      "background_en": "Top of the desk with the laptop keyboard",
+      "cast": [
+        {"id": "mochi", "acting_en": "walking across the laptop keyboard right in front of the webcam", "acting_ja": "キーボードを横切る"},
+        {"id": "yu", "acting_en": "frozen with a shocked face", "acting_ja": "固まる"}
+      ],
+      "balloons": [{"speaker": "yu", "type": "shout", "text": "あっ"}],
+      "sfx": [{"text": "トコトコ"}]
+    },
+    {
+      "role": "ketsu",
+      "beat_ja": "画面いっぱいの猫。真顔でごまかす",
+      "shot": "bust",
+      "angle": "eye-level",
+      "background_en": "The same home office",
+      "cast": [
+        {"id": "yu", "acting_en": "deadpan face, holding the cat up toward the webcam", "acting_ja": "真顔で猫を見せる"}
+      ],
+      "balloons": [{"speaker": "yu", "type": "normal", "text": "…議題は猫です"}]
+    },
+    {
+      "role": "ki",
+      "beat_ja": "昼休み、ソファで猫と休む",
+      "shot": "long",
+      "angle": "eye-level",
+      "background_en": "A cozy living room with a sofa and sunlight from the window",
+      "cast": [
+        {"id": "yu", "acting_en": "slumped on the sofa, stretching his arms with relief", "acting_ja": "ソファでのびる"},
+        {"id": "mochi", "acting_en": "lying next to him", "acting_ja": "となりで寝る"}
+      ],
+      "balloons": [{"speaker": "yu", "type": "normal", "text": "やっと休憩…"}]
+    },
+    {
+      "role": "sho",
+      "beat_ja": "猫をなでて小言を言う",
+      "shot": "medium",
+      "angle": "eye-level",
+      "background_en": "The same sofa",
+      "cast": [
+        {"id": "yu", "acting_en": "petting the cat with a fake stern face", "acting_ja": "なでながら小言"},
+        {"id": "mochi", "acting_en": "purring with eyes closed", "acting_ja": "ゴロゴロ"}
+      ],
+      "balloons": [{"speaker": "yu", "type": "normal", "text": "さっきはよくも"}],
+      "sfx": [{"text": "ゴロゴロ"}]
+    },
+    {
+      "role": "ten",
+      "beat_ja": "スマホに会議の感想が届いて驚く",
+      "shot": "closeup",
+      "angle": "low",
+      "background_en": "Plain background",
+      "effects_en": "Dramatic radial speed lines",
+      "cast": [
+        {"id": "yu", "acting_en": "staring at his smartphone with wide shocked eyes", "acting_ja": "スマホを見て驚く"}
+      ],
+      "balloons": [
+        {"type": "narration", "text": "部長：猫また見たい"},
+        {"speaker": "yu", "type": "shout", "text": "えっ!?"}
+      ]
+    },
+    {
+      "role": "ketsu",
+      "beat_ja": "午後の会議には猫が主役で出ている",
+      "shot": "medium",
+      "angle": "eye-level",
+      "background_en": "The home office in the afternoon",
+      "cast": [
+        {"id": "mochi", "acting_en": "sitting proudly in front of the webcam like a presenter", "acting_ja": "カメラの前で堂々と座る"},
+        {"id": "yu", "acting_en": "sitting off to the side with a defeated smile", "acting_ja": "横で苦笑い"}
+      ],
+      "balloons": [{"speaker": "yu", "type": "normal", "text": "…次から君が出て"}]
+    }
+  ]
+}
