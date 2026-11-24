@@ -20,7 +20,7 @@ Claude Code / Copilot CLI / Codex CLI / OpenCode に対応した Agent Skills �
 | [composition-picker](./plugins/composition-picker/) | AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）の構図を、Danbooruの構図・ポーズ系タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル |
 | [character-look-picker](./plugins/character-look-picker/) | AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）で描く成人女性キャラの外見（髪色・髪型・目・表情・体型・肌・アクセント）を、Danbooruタグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル |
 | [outfit-picker](./plugins/outfit-picker/) | AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）で描く成人女性キャラの服装を、Danbooruの衣装タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル |
-| [manga-planner](./plugins/manga-planner/) | 漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ漫画（起承転結・コマ割り・ショット・台詞・吹き出し）を設計できる対話型スキル。設計書（spec.json）とネーム画像（SVG）を作り、MOSS-Image 用の Layout 下書きに変換して moss-image-prompt-craft に渡す |
+| [manga-planner](./plugins/manga-planner/) | 漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ・1ページ漫画（起承転結・コマ割り・ショット・台詞・吹き出し）を設計できる対話型スキル。設計書（spec.json）とネーム画像（SVG）を作り、MOSS-Image 用の Layout 下書きに変換して moss-image-prompt-craft に渡す |
 
 ## インストール方法
 

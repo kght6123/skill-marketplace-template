@@ -174,6 +174,51 @@ class HachikomaTests(unittest.TestCase):
         self.assertEqual(sum(1 for i in drafts[0]["items"] if i["label"] == "object"), 8)
 
 
+class PageTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+        self.spec = json.loads((EXAMPLES / "jisui.spec.json").read_text(encoding="utf-8"))
+
+    def test_example_is_valid(self):
+        self.assertEqual(M.check(self.spec, self.layouts)[0], [])
+
+    def test_roles_must_not_go_backwards(self):
+        self.spec["panels"][3]["role"] = "sho"
+        self.spec["panels"][2]["role"] = "ten"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("起→承→転→結の順" in e for e in errors))
+
+    def test_all_four_roles_required(self):
+        for p in self.spec["panels"][1:4]:
+            p["role"] = "sho"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("転 がありません" in e for e in errors))
+
+    def test_big_panel_used_for_sho_warns(self):
+        self.spec["layout"] = "page-big-opening-5"
+        self.spec["panels"][0]["role"] = "ki"
+        roles = ["sho", "sho", "sho", "ten", "ketsu"]
+        for p, r in zip(self.spec["panels"], roles):
+            p["role"] = r
+        self.spec["panels"][0]["role"] = "ki"
+        self.assertEqual(M.check(self.spec, self.layouts)[1], [])
+        self.spec["layout"] = "page-big-ending-5"
+        self.spec["panels"][4]["role"] = "sho"
+        self.spec["panels"][3]["role"] = "sho"
+        warnings = M.check(self.spec, self.layouts)[1]
+        self.assertTrue(any("大ゴマ" in w for w in warnings))
+
+    def test_panel_count_follows_template(self):
+        self.spec["layout"] = "page-basic-6"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("6 コマ必要" in e for e in errors))
+
+    def test_moss_caption_describes_page(self):
+        draft = M.moss_drafts(self.spec, self.layouts)[0]
+        self.assertIn("single Japanese manga page with 5 panels", draft["summary"]["caption"])
+        self.assertEqual((draft["width"], draft["height"]), (1440, 2032))
+
+
 class OutputTests(unittest.TestCase):
     def setUp(self):
         self.layouts = M.load_layouts()

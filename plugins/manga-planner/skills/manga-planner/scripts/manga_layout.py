@@ -23,6 +23,7 @@ KISHOTENKETSU = ["ki", "sho", "ten", "ketsu"]
 FORMATS = {
     "yonkoma": {"roles": KISHOTENKETSU, "label_ja": "4コマ"},
     "hachikoma": {"roles": KISHOTENKETSU * 2, "label_ja": "8コマ（4コマ×2列）"},
+    "page": {"roles": "flow", "label_ja": "1ページ"},
 }
 ROLE_EN = {"ki": "setup", "sho": "development", "ten": "twist", "ketsu": "punchline"}
 ROLE_JA = {"ki": "起", "sho": "承", "ten": "転", "ketsu": "結"}
@@ -228,6 +229,8 @@ def check(spec, layouts):
     if fmt in FORMATS and len(valid_panels) == len(panels) == len(boxes) and boxes:
         errors.extend(role_errors(FORMATS[fmt]["roles"], [p.get("role") for p in panels]))
         warnings.extend(direction_warnings(panels))
+        if FORMATS[fmt]["roles"] == "flow":
+            warnings.extend(big_panel_warnings(panels, boxes))
 
     if not errors and layout:
         try:
@@ -252,6 +255,18 @@ def direction_warnings(panels):
                 warnings.append(f"{i + 1}コマ目（転の最初）が直前のコマと同じショット・アングルです。"
                                 "絵を大きく変えると意外さが伝わります")
     return warnings
+
+
+def big_panel_warnings(panels, boxes):
+    """コマの大きさがそろっていないページで、大ゴマを承に使っていないかを見る。"""
+    areas = [(b[2] - b[0]) * (b[3] - b[1]) for _, b in boxes]
+    if max(areas) < min(areas) * 1.5:
+        return []
+    big = max(range(len(areas)), key=areas.__getitem__)
+    if panels[big].get("role") == "sho":
+        return [f"{big + 1}コマ目は一番大きいコマ（大ゴマ）ですが、役割が承です。"
+                "大ゴマは起（場所や登場）・転（山場）・結（オチ）に使うと効きます"]
+    return []
 
 
 # ---------------------------------------------------------------- 配置
@@ -348,6 +363,10 @@ def page_description(fmt, layout, page_index, n_titles):
                 + (", each with a short title at the top" if n_titles else "")
                 + ", eight equal panels in total separated by clean white gutters. "
                 "Read the right strip first from top to bottom, then the left strip from top to bottom.")
+    if fmt == "page":
+        n = len(layout["pages"][page_index]["panels"])
+        return (f"A single Japanese manga page with {n} panels of varied sizes separated by clean white gutters, "
+                "with wider gutters between rows. Panels read right to left within a row, rows top to bottom.")
     raise SpecError(f"format '{fmt}' の説明文がありません")
 
 
@@ -360,7 +379,8 @@ def moss_drafts(spec, layouts):
     color = spec.get("color", "monochrome")
     looks = "; ".join(c["look_en"].rstrip(".") for c in spec["characters"])
     meta = {"yonkoma": ["yonkoma", "4-panel manga", "comic strip", "manga"],
-            "hachikoma": ["yonkoma", "4-panel manga", "comic strip", "manga"]}.get(spec["format"], ["manga"])
+            "hachikoma": ["yonkoma", "4-panel manga", "comic strip", "manga"],
+            "page": ["manga", "manga page", "comic"]}.get(spec["format"], ["manga"])
     meta = list(meta) + (["full color"] if color == "full-color" else [])
 
     drafts = []

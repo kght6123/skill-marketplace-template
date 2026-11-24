@@ -1,13 +1,13 @@
 ---
 name: manga-planner
-description: 漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ漫画（起承転結・コマ割り・ショット・台詞・吹き出し・擬音）を設計できる対話型スキル。設計書（spec.json）とネーム画像（SVG）を作り、MOSS-Image 用の Layout 下書きに変換して moss-image-prompt-craft に渡す。ユーザーが「漫画を作りたい」「4コマを作りたい」「4コマ漫画の設計」「8コマ漫画」「ネームを作って」「コマ割りを考えて」「漫画の話を考えて」「MOSSで4コマ漫画」「manga planner」などと言ったら必ず使う。画像生成AIで漫画を作る前に、話とコマ割りを固めたいときにも積極的に使う。
+description: 漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ・1ページ漫画（起承転結・コマ割り・ショット・台詞・吹き出し・擬音）を設計できる対話型スキル。設計書（spec.json）とネーム画像（SVG）を作り、MOSS-Image 用の Layout 下書きに変換して moss-image-prompt-craft に渡す。ユーザーが「漫画を作りたい」「4コマを作りたい」「4コマ漫画の設計」「8コマ漫画」「1ページ漫画」「ネームを作って」「コマ割りを考えて」「漫画の話を考えて」「MOSSで4コマ漫画」「manga planner」などと言ったら必ず使う。画像生成AIで漫画を作る前に、話とコマ割りを固めたいときにも積極的に使う。
 ---
 
 # 漫画プランナー
 
 ユーザーは漫画に詳しくない。**考えるのは Claude、ユーザーは選ぶだけ**。各ステップで候補を出し、選んでもらって次へ進む。出来上がるのは画像ではなく、モデルに依存しない **漫画の設計書（spec.json）** と、その確認用の **ネーム画像（SVG）** 。生成用のプロンプトは設計書から作る。
 
-現在の対応: **4コマ・8コマ（4コマ×2列）** ／ 出力先 **MOSS-Image**。1ページ・2ページ、MiniMax-H3-Image・H3 への出力はまだない。頼まれたらそう伝え、対応している形式で作るか聞く。
+現在の対応: **4コマ・8コマ（4コマ×2列）・1ページ** ／ 出力先 **MOSS-Image**。2ページ、MiniMax-H3-Image・H3 への出力はまだない。頼まれたらそう伝え、対応している形式で作るか聞く。
 
 ## 選択肢の出し方
 
@@ -23,7 +23,7 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 
 | 質問 | 選択肢 |
 |---|---|
-| 形式 | 4コマ（迷ったらこれ）／8コマ（4コマ×2列） |
+| 形式 | 4コマ（迷ったらこれ）／8コマ（4コマ×2列）／1ページ |
 | ジャンル | ギャグ／日常／ラブコメ／解説（ちょっとシリアスは Other で） |
 | オチの型 | ボケ／どんでん返し／ほっこり／ツッコミ（説明は `references/story-structures.md` §2） |
 | 色 | モノクロ＋トーン（王道）／フルカラー |
@@ -34,6 +34,7 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 |---|---|
 | 4コマ（`yonkoma`） | `yonkoma-title` 縦・タイトルあり（迷ったらこれ）／`yonkoma-plain` 縦・タイトルなし／`yonkoma-slim` 細長 |
 | 8コマ（`hachikoma`） | `hachikoma-title` 2列・列ごとにタイトル／`hachikoma-plain` 2列・タイトルなし |
+| 1ページ（`page`） | `page-basic-6` 基本の6コマ（迷ったらこれ）／`page-big-ending-5` オチが大ゴマ／`page-big-opening-5` 最初が大ゴマ／`page-tall-5` 縦長ゴマあり |
 
 8コマは、さらに「2本立て（別々の4コマを2本）」か「前後編（1本目のオチが2本目の起になる）」かを聞く（`story-structures.md` §6）。
 
@@ -50,7 +51,7 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 
 ### Step 3: ネタを選ぶ
 
-`references/story-structures.md` を読み、**3案** をそれぞれ「タイトル＋起・承・転・結を各1行（台詞つき）」で作る。8コマなら1案に2本分（右の列→左の列）を書く。選択肢は3案＋「別の3案を出して」。選ばれた案の一部だけ直したいと言われたら、そこだけ直して再提示する。
+`references/story-structures.md` を読み、**3案** をそれぞれ「タイトル＋起・承・転・結を各1行（台詞つき）」で作る。8コマなら1案に2本分（右の列→左の列）を書く。1ページなら、テンプレートのコマ数に合わせて各コマ1行で書き、大ゴマに何を描くかを先に決める（`story-structures.md` §7）。選択肢は3案＋「別の3案を出して」。選ばれた案の一部だけ直したいと言われたら、そこだけ直して再提示する。
 
 ### Step 4: コマの演出を確認する
 
@@ -67,7 +68,7 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 
 ### Step 6: 設計書とネームを作る
 
-1. 作業ディレクトリに `manga/<題材の英小文字スラッグ>/spec.json` を書く。書式は作例（4コマ `examples/neko-satsuei.spec.json`、8コマ `examples/zaitaku.spec.json`）と下の「spec の項目」に合わせる
+1. 作業ディレクトリに `manga/<題材の英小文字スラッグ>/spec.json` を書く。書式は作例（4コマ `examples/neko-satsuei.spec.json`、8コマ `examples/zaitaku.spec.json`、1ページ `examples/jisui.spec.json`）と下の「spec の項目」に合わせる
 2. 同梱スクリプトで検査とネーム出力をする。スクリプトのパスは作業ディレクトリではなく、この SKILL.md のあるディレクトリから解決し、絶対パスで実行する:
 
 ```bash
@@ -96,7 +97,7 @@ npx skills add kght6123/skill-marketplace-template --skill moss-image-prompt-cra
 
 | 項目 | 必須 | 内容 |
 |---|---|---|
-| `format` | ○ | `yonkoma` / `hachikoma` |
+| `format` | ○ | `yonkoma` / `hachikoma` / `page` |
 | `layout` | ○ | `assets/layouts.json` のキー（その format 用のもの） |
 | `title` | タイトル枠ありなら○ | 画像に描くタイトル（日本語のまま）。枠が1つなら文字列、2つ以上なら読む順のリスト（8コマは右の列が先） |
 | `genre` / `ending` | | 記録用（`story-structures.md` の値） |
@@ -107,7 +108,7 @@ npx skills add kght6123/skill-marketplace-template --skill moss-image-prompt-cra
 
 | panels の項目 | 必須 | 内容 |
 |---|---|---|
-| `role` | ○ | 4コマは順に `ki` `sho` `ten` `ketsu`。8コマはそれを2回（右の列、左の列） |
+| `role` | ○ | 4コマは順に `ki` `sho` `ten` `ketsu`。8コマはそれを2回（右の列、左の列）。1ページは起→承→転→結の順で、同じ役割が続いてよい（4つとも1コマ以上） |
 | `beat_ja` | ○ | そのコマで起きることを日本語1行 |
 | `shot` / `angle` | shotは○ | `direction.md` §1・§2 の値（angle 既定は `eye-level`） |
 | `background_en` | 起は推奨 | 場所・背景を英語で |
