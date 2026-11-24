@@ -334,6 +334,24 @@ class OutputTests(unittest.TestCase):
                 result = json.loads(compiler.compile_prompt(M.moss_draft(spec, self.layouts)))
                 self.assertEqual(result["bbox_format"], "yxyx")
 
+    def test_thought_balloon_is_a_cloud(self):
+        self.spec["panels"][0]["balloons"][0]["type"] = "thought"
+        pl = M.place(self.spec, self.layouts["yonkoma-title"])[0]
+        svg = "".join(M.panel_svg(pl))
+        self.assertGreaterEqual(svg.count("<circle"), 10)  # 縁の円8個以上＋しっぽの丸2個
+        self.assertNotRegex(svg, r'<ellipse[^>]*stroke="#000"')  # 普通の楕円の吹き出しを描いていない
+
+    def test_long_notes_are_shortened_inside_the_panel(self):
+        long_note = "とても長い注記がここに入ってコマの幅をこえてしまう場合のテスト用の文章です"
+        self.spec["panels"][0]["cast"][0]["acting_ja"] = long_note
+        self.spec["panels"][0]["beat_ja"] = long_note * 2
+        pl = M.place(self.spec, self.layouts["yonkoma-title"])[0]
+        svg = "".join(M.panel_svg(pl))
+        self.assertIn("…</text>", svg)
+        self.assertIn(f"<title>{long_note}</title>", svg)
+        x0, _, x1, _ = pl["figures"][0]["bbox"]
+        self.assertLessEqual(M.text_width(M.fit_text(long_note, x1 - x0 - 12, 18), 18), x1 - x0 - 12)
+
     def test_preview_escapes_text(self):
         self.spec["panels"][0]["balloons"][0]["text"] = "<&>"
         svg = M.preview_svg(self.spec, self.layouts)
