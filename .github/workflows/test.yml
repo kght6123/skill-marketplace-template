@@ -28,3 +28,16 @@ jobs:
           git config --global user.email "test@example.com"
           git config --global user.name "test"
           node plugins/ai-dev-orchestration/tests/run-tests.mjs
+
+  manga:
+    name: manga-planner
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: スクリプトのテスト
+        run: python3 -I plugins/manga-planner/skills/manga-planner/scripts/test_manga_layout.py
+      - name: 作例の検査
+        run: python3 -I plugins/manga-planner/skills/manga-planner/scripts/manga_layout.py check plugins/manga-planner/skills/manga-planner/examples/neko-satsuei.spec.json
