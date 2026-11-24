@@ -226,6 +226,23 @@ class PageTests(unittest.TestCase):
         self.assertEqual((draft["width"], draft["height"]), (1440, 2032))
 
 
+class SquarePageTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+        self.spec = load_example()  # 4コマの作例を正方形1ページに流し込む
+        self.spec["format"] = "page"
+        del self.spec["title"]
+
+    def test_four_panel_story_fits_every_square_template(self):
+        for name in ("page-square-4", "page-square-big-ending-4", "page-square-big-opening-4"):
+            with self.subTest(layout=name):
+                self.spec["layout"] = name
+                self.assertEqual(M.check(self.spec, self.layouts)[0], [])
+                draft = M.moss_draft(self.spec, self.layouts)
+                self.assertEqual((draft["width"], draft["height"]), (1536, 1536))
+                self.assertIn("single square Japanese manga page", draft["summary"]["caption"])
+
+
 class SpreadTests(unittest.TestCase):
     def setUp(self):
         self.layouts = M.load_layouts()

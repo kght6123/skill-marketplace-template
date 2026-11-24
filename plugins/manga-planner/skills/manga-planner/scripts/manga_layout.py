@@ -397,7 +397,8 @@ def canvas_description(fmt, layout, n_titles):
                 "Read the right strip first from top to bottom, then the left strip from top to bottom.")
     if fmt == "page":
         n = len(panel_boxes(layout))
-        return (f"A single Japanese manga page with {n} panels of varied sizes separated by clean white gutters, "
+        shape = "square " if layout["width"] == layout["height"] else ""
+        return (f"A single {shape}Japanese manga page with {n} panels of varied sizes separated by clean white gutters, "
                 "with wider gutters between rows. Panels read right to left within a row, rows top to bottom.")
     if fmt == "spread":
         span = (" One large panel spans across both pages, crossing the center fold."
