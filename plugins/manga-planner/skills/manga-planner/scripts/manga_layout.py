@@ -58,9 +58,38 @@ class SpecError(Exception):
     pass
 
 
+SPREAD_PAGE_W, SPREAD_H = 1152, 1632  # 2ページ（横長1枚）の1ページ分
+
+
 def load_layouts():
+    """layouts.json に、1ページのテンプレートを2つ組み合わせた2ページのテンプレートを足して返す。"""
     with LAYOUTS_PATH.open(encoding="utf-8") as f:
-        return json.load(f)
+        layouts = json.load(f)
+    pages = {k: v for k, v in layouts.items() if v["format"] == "page" and v["width"] != v["height"]}
+    for a, la in pages.items():
+        for b, lb in pages.items():
+            key = f"spread-{a[len('page-'):]}--{b[len('page-'):]}"
+            if key not in layouts:
+                layouts[key] = combine_pages(la, lb)
+    return layouts
+
+
+def combine_pages(la, lb):
+    """1ページのテンプレート2つを、横長1枚の2ページ（右が1ページ目）に縮めて並べる。"""
+    def scale(lay, off):
+        sx, sy = SPREAD_PAGE_W / lay["width"], SPREAD_H / lay["height"]
+        return [[round(x0 * sx) + off, round(y0 * sy), round(x1 * sx) + off, round(y1 * sy)]
+                for x0, y0, x1, y1 in lay["pages"][0]["panels"]]
+    name = lambda lay: lay["label_ja"].replace("1ページ・", "")
+    note = lambda lay: lay["note_ja"].replace("。迷ったらこれ", "")
+    return {
+        "format": "spread", "generated": True,
+        "label_ja": f"2ページ・{name(la)}＋{name(lb)}",
+        "note_ja": f"1ページ目: {note(la)}／2ページ目: {note(lb)}",
+        "width": 2 * SPREAD_PAGE_W, "height": SPREAD_H, "reading": "rows", "fold": True,
+        "pages": [{"titles": [], "panels": scale(la, SPREAD_PAGE_W)},
+                  {"titles": [], "panels": scale(lb, 0)}],
+    }
 
 
 def text_metrics(text):
@@ -385,6 +414,9 @@ BALLOON_CAPTION = {
 
 def canvas_description(fmt, layout, n_titles):
     """summary.caption の最初の文（画像全体の体裁と読み順）。"""
+    if fmt == "yonkoma" and layout["width"] > layout["height"]:
+        return ("A horizontal four-panel Japanese yonkoma comic strip on a white banner, four equal panels "
+                "placed side by side and separated by clean white gutters. Panels read from right to left.")
     if fmt == "yonkoma":
         return ("A vertical four-panel Japanese yonkoma comic strip on a white page"
                 + (", with a short title at the top and" if n_titles else ", with")
@@ -487,15 +519,52 @@ def panel_items(n, pl):
 
 # ---------------------------------------------------------------- ネーム（SVG）
 
-def svg_text(x, y, text, size, anchor="middle", weight="normal", fill="#000"):
+def text_width(text, size):
+    """表示幅の目安。全角は1字、半角は0.55字として数える。"""
+    return sum(0.55 if ord(c) < 128 else 1.0 for c in text) * size
+
+
+def fit_text(text, width, size):
+    """width に収まらなければ末尾を「…」で省略する。"""
+    if text_width(text, size) <= width:
+        return text
+    while text and text_width(text + "…", size) > width:
+        text = text[:-1]
+    return text + "…"
+
+
+def svg_text(x, y, text, size, anchor="middle", weight="normal", fill="#000", max_width=None):
+    """文字を描く。max_width を渡すと、はみ出す分を「…」で省略し、全文をツールチップに入れる。"""
     lines = text.split("\n")
+    shown = [fit_text(line, max_width, size) if max_width else line for line in lines]
     start = y - (len(lines) - 1) * size * 0.65
     out = []
-    for k, line in enumerate(lines):
+    for k, line in enumerate(shown):
         out.append(f'<text x="{x:.0f}" y="{start + k * size * 1.3:.0f}" font-size="{size}" '
                    f'text-anchor="{anchor}" dominant-baseline="middle" font-weight="{weight}" '
                    f'fill="{fill}">{escape(line)}</text>')
+    if shown != lines:
+        return f'<g><title>{escape(text)}</title>{"".join(out)}</g>'
     return "".join(out)
+
+
+def cloud_svg(cx, cy, rx, ry, tail_side):
+    """心の声の雲形の吹き出し。縁に小さな円を並べ、話し手の側へ小さな丸を2つ出す。"""
+    import math
+    r = min(rx, ry) * 0.4
+    ex, ey = rx - r * 0.5, ry - r * 0.5  # 文字の入る内側を残すため、こぶは箱の外へ少し出す
+    n = max(8, round(2 * math.pi * math.sqrt((ex * ex + ey * ey) / 2) / (r * 1.5)))
+    out = []
+    for k in range(n):
+        t = 2 * math.pi * k / n
+        out.append(f'<circle cx="{cx + ex * math.cos(t):.1f}" cy="{cy + ey * math.sin(t):.1f}" r="{r:.1f}" '
+                   f'fill="#fff" stroke="#000" stroke-width="2"/>')
+    out.append(f'<ellipse cx="{cx}" cy="{cy}" rx="{ex:.1f}" ry="{ey:.1f}" fill="#fff"/>')
+    d = -1 if tail_side == "left" else 1
+    for dx, dy, rr in ((0.45, 0.35, 0.16), (0.6, 0.7, 0.1)):
+        out.append(f'<circle cx="{cx + d * rx * dx:.1f}" cy="{cy + ey + r + ry * dy:.1f}" r="{ry * rr:.1f}" '
+                   f'fill="#fff" stroke="#000" stroke-width="2"/>')
+    return out
 
 
 def preview_svg(spec, layouts):
@@ -533,16 +602,20 @@ def panel_svg(pl):
         fx0, fy0, fx1, fy1 = f["bbox"]
         out.append(f'<rect x="{fx0}" y="{fy0}" width="{fx1 - fx0}" height="{fy1 - fy0}" fill="#f4f4f4" '
                    f'stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>')
-        out.append(svg_text((fx0 + fx1) / 2, fy0 + 26, f["character"]["name"], 24, weight="bold", fill="#555"))
+        fw = fx1 - fx0 - 12
+        out.append(svg_text((fx0 + fx1) / 2, fy0 + 26, f["character"]["name"], 24, weight="bold", fill="#555",
+                            max_width=fw))
         note = f["member"].get("acting_ja")
         if note:
-            out.append(svg_text((fx0 + fx1) / 2, fy0 + 60, note, 18, fill="#777"))
+            out.append(svg_text((fx0 + fx1) / 2, fy0 + 60, note, 18, fill="#777", max_width=fw))
     for bl in pl["balloons"]:
         bx0, by0, bx1, by1 = bl["bbox"]
         btype = bl["balloon"].get("type", "normal")
         cx, cy, rx, ry = (bx0 + bx1) / 2, (by0 + by1) / 2, (bx1 - bx0) / 2, (by1 - by0) / 2
         if btype == "narration":
             out.append(f'<rect x="{bx0}" y="{by0}" width="{bx1 - bx0}" height="{by1 - by0}" fill="#fff" stroke="#000" stroke-width="2"/>')
+        elif btype == "thought":
+            out.extend(cloud_svg(cx, cy, rx, ry, bl.get("speaker_side")))
         else:
             dash = ' stroke-dasharray="6 5"' if btype == "whisper" else ""
             width = 5 if btype == "shout" else 2
@@ -551,11 +624,12 @@ def panel_svg(pl):
                             weight="bold" if btype == "shout" else "normal"))
     for s in pl["sfx"]:
         sx0, sy0, sx1, sy1 = s["bbox"]
-        out.append(svg_text((sx0 + sx1) / 2, (sy0 + sy1) / 2, s["sfx"]["text"],
-                            round((sy1 - sy0) * 0.45), weight="bold", fill="#c0392b"))
+        text = s["sfx"]["text"]
+        size = round(min((sy1 - sy0) * 0.45, (sx1 - sx0) / max(text_width(text, 1), 1)))
+        out.append(svg_text((sx0 + sx1) / 2, (sy0 + sy1) / 2, text, size, weight="bold", fill="#c0392b"))
     label = f"{i} {ROLE_JA[p['role']]}｜{p['shot']} / {p.get('angle', 'eye-level')}｜{p.get('beat_ja', '')}"
     out.append(f'<rect x="{x0 + 3}" y="{y1 - 34}" width="{x1 - x0 - 6}" height="31" fill="#fff" fill-opacity="0.85"/>')
-    out.append(svg_text(x0 + 12, y1 - 18, label, 17, anchor="start", fill="#666"))
+    out.append(svg_text(x0 + 12, y1 - 18, label, 17, anchor="start", fill="#666", max_width=x1 - x0 - 24))
     return out
 
 
