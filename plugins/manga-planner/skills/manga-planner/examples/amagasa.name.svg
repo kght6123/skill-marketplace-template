@@ -1,0 +1,120 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2304" height="1632" viewBox="0 0 2304 1632" font-family="Hiragino Sans, 'Noto Sans JP', 'Yu Gothic', sans-serif">
+<rect width="2304" height="1632" fill="#fff"/>
+<line x1="1152" y1="0" x2="1152" y2="1632" stroke="#e74c3c" stroke-width="2" stroke-dasharray="14 10"/>
+<text x="2288" y="22" font-size="20" text-anchor="end" dominant-baseline="middle" font-weight="normal" fill="#999">p1（めくり前）</text>
+<text x="1136" y="22" font-size="20" text-anchor="end" dominant-baseline="middle" font-weight="normal" fill="#999">p2（めくり後）</text>
+<rect x="1203" y="51" width="1050" height="630" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="1228" y="220" width="1000" height="436" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="1728" y="246" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="1728" y="280" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">雨を見上げて困る</text>
+<ellipse cx="2045.5" cy="142.0" rx="182.5" ry="66.0" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="2046" y="142" font-size="45" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">うそ、雨…</text>
+<rect x="1206" y="647" width="1044" height="31" fill="#fff" fill-opacity="0.85"/>
+<text x="1215" y="663" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">1 起｜long / high｜駅前で急な雨。立ち止まる</text>
+<rect x="1736" y="713" width="517" height="418" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="1753" y="805" width="483" height="309" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="1994" y="831" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="1994" y="865" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">カバンを探る</text>
+<ellipse cx="2159.0" cy="763.5" rx="77.0" ry="33.5" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="2159" y="764" font-size="23" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">傘…ない</text>
+<rect x="1739" y="1097" width="511" height="31" fill="#fff" fill-opacity="0.85"/>
+<text x="1748" y="1113" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">2 起｜medium / eye-level｜カバンを探しても傘がない</text>
+<rect x="1203" y="713" width="517" height="418" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="1462" y="805" width="241" height="309" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="1582" y="831" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ソウタ</text>
+<text x="1582" y="865" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">傘を差し出す</text>
+<rect x="1220" y="805" width="242" height="309" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="1341" y="831" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="1341" y="865" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">驚いて振り向く</text>
+<ellipse cx="1610.0" cy="763.5" rx="93.0" ry="33.5" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="1610" y="764" font-size="23" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">よかったら</text>
+<rect x="1206" y="1097" width="511" height="31" fill="#fff" fill-opacity="0.85"/>
+<text x="1215" y="1113" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">3 承｜medium / eye-level｜隣の男性が傘を差し出す</text>
+<rect x="1907" y="1163" width="346" height="418" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="1921" y="1238" width="318" height="329" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="2080" y="1264" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="2080" y="1298" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">照れる</text>
+<circle cx="2234.3" cy="1200.5" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2230.0" cy="1209.2" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2218.0" cy="1216.0" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2201.1" cy="1219.2" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2183.1" cy="1218.1" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2168.2" cy="1213.0" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2159.8" cy="1205.0" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2159.8" cy="1196.0" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2168.2" cy="1188.0" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2183.1" cy="1182.9" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2201.1" cy="1181.8" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2218.0" cy="1185.0" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2230.0" cy="1191.8" r="9.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<ellipse cx="2196.5" cy="1200.5" rx="37.8" ry="18.8" fill="#fff"/>
+<circle cx="2215.6" cy="1236.9" r="3.8" fill="#fff" stroke="#000" stroke-width="2"/>
+<circle cx="2222.0" cy="1245.2" r="2.4" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="2196" y="1200" font-size="16" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">えっ…</text>
+<text x="1976" y="1426" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#c0392b">ドキッ</text>
+<rect x="1910" y="1547" width="340" height="31" fill="#fff" fill-opacity="0.85"/>
+<g><title>4 承｜closeup / eye-level｜思わず照れる</title><text x="1919" y="1563" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">4 承｜closeup / eye-level｜思わず…</text></g>
+<rect x="1203" y="1163" width="688" height="418" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="1547" y="1276" width="327" height="288" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="1710" y="1302" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ソウタ</text>
+<text x="1710" y="1336" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">傘を開こうとする</text>
+<rect x="1220" y="1276" width="327" height="288" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="1384" y="1302" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="1384" y="1336" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">うなずく</text>
+<ellipse cx="1731.0" cy="1224.0" rx="143.0" ry="44.0" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="1731" y="1224" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">駅まで一緒に</text>
+<ellipse cx="1491.0" cy="1224.0" rx="80.0" ry="44.0" fill="#fff" stroke="#000" stroke-width="2" stroke-dasharray="6 5"/>
+<text x="1491" y="1224" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">はい…</text>
+<rect x="1206" y="1547" width="682" height="31" fill="#fff" fill-opacity="0.85"/>
+<text x="1215" y="1563" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">5 承｜full / eye-level｜傘に入れてもらい、歩き出そうとする（引き）</text>
+<rect x="584" y="51" width="517" height="418" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="601" y="143" width="483" height="309" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="842" y="169" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ソウタ</text>
+<text x="842" y="203" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">穴だらけの傘に固まる</text>
+<ellipse cx="1055.5" cy="101.5" rx="28.5" ry="33.5" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="1056" y="102" font-size="23" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">あ</text>
+<text x="684" y="314" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#c0392b">バサッ</text>
+<rect x="587" y="435" width="511" height="31" fill="#fff" fill-opacity="0.85"/>
+<text x="596" y="451" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">6 転｜closeup / low｜開いた傘が穴だらけ</text>
+<rect x="51" y="51" width="517" height="418" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="310" y="143" width="241" height="309" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="430" y="169" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="430" y="203" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">ずぶ濡れで呆然</text>
+<rect x="68" y="143" width="242" height="309" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="189" y="169" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ソウタ</text>
+<text x="189" y="203" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">壊れた傘を持ったまま</text>
+<ellipse cx="442.0" cy="101.5" rx="109.0" ry="33.5" fill="#fff" stroke="#000" stroke-width="5"/>
+<text x="442" y="102" font-size="23" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#000">穴だらけ!?</text>
+<rect x="54" y="435" width="511" height="31" fill="#fff" fill-opacity="0.85"/>
+<text x="63" y="451" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">7 転｜full / eye-level｜二人ともずぶ濡れ</text>
+<rect x="755" y="501" width="346" height="418" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="928" y="576" width="159" height="329" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="1008" y="602" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ソウタ</text>
+<text x="1008" y="636" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">申し訳なさそう</text>
+<rect x="769" y="576" width="159" height="329" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="848" y="602" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="848" y="636" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">見つめ返す</text>
+<ellipse cx="1033.0" cy="538.5" rx="54.0" ry="23.5" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="1033" y="538" font-size="16" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">ごめん…</text>
+<rect x="758" y="885" width="340" height="31" fill="#fff" fill-opacity="0.85"/>
+<g><title>8 転｜bust / over-shoulder｜顔を見合わせる</title><text x="767" y="901" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">8 転｜bust / over-shoulder｜顔を…</text></g>
+<rect x="51" y="501" width="688" height="418" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="68" y="614" width="654" height="288" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="395" y="640" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="395" y="674" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">笑い出す</text>
+<ellipse cx="642.0" cy="562.0" rx="80.0" ry="44.0" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="642" y="562" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">ふふっ</text>
+<rect x="54" y="885" width="682" height="31" fill="#fff" fill-opacity="0.85"/>
+<text x="63" y="901" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">9 結｜bust / eye-level｜思わず笑い出す</text>
+<rect x="51" y="951" width="1050" height="630" fill="none" stroke="#000" stroke-width="6"/>
+<rect x="576" y="1120" width="500" height="436" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="826" y="1146" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">ソウタ</text>
+<text x="826" y="1180" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">笑いながら走る</text>
+<rect x="76" y="1120" width="500" height="436" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
+<text x="326" y="1146" font-size="24" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#555">アオイ</text>
+<text x="326" y="1180" font-size="18" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#777">一緒に走る</text>
+<ellipse cx="925.0" cy="1042.0" rx="151.0" ry="66.0" fill="#fff" stroke="#000" stroke-width="2"/>
+<text x="925" y="1042" font-size="45" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">走ろう！</text>
+<rect x="54" y="1547" width="1044" height="31" fill="#fff" fill-opacity="0.85"/>
+<text x="63" y="1563" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">10 結｜long / eye-level｜二人で笑いながら雨の中を走る</text>
+</svg>
