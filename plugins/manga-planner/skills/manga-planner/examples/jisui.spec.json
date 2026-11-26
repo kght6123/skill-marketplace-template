@@ -1,0 +1,82 @@
+{
+  "format": "page",
+  "layout": "page-big-ending-5",
+  "genre": "daily",
+  "ending": "wholesome",
+  "color": "monochrome",
+  "style_en": "Clean black ink line art with light gray screentone shading, soft expressive faces",
+  "characters": [
+    {
+      "id": "saki",
+      "name": "サキ",
+      "look_ja": "茶髪のポニーテール、エプロン",
+      "look_en": "a young woman with a brown ponytail and a striped apron"
+    },
+    {
+      "id": "haru",
+      "name": "ハル",
+      "look_ja": "黒髪のくせ毛、パーカー",
+      "look_en": "a young man with messy black hair and a navy hoodie"
+    }
+  ],
+  "panels": [
+    {
+      "role": "ki",
+      "beat_ja": "レシピ動画を見て、はじめての自炊を決める",
+      "shot": "medium",
+      "angle": "eye-level",
+      "background_en": "A small apartment kitchen with a smartphone propped up on the counter",
+      "cast": [
+        {"id": "saki", "acting_en": "watching a recipe video on her phone with a confident fist pump", "acting_ja": "動画を見てやる気"}
+      ],
+      "balloons": [{"speaker": "saki", "type": "normal", "text": "簡単そう！"}]
+    },
+    {
+      "role": "sho",
+      "beat_ja": "手際よく材料を切る",
+      "shot": "closeup",
+      "angle": "high",
+      "background_en": "A cutting board with an onion and a knife",
+      "cast": [
+        {"id": "saki", "acting_en": "chopping an onion quickly with a proud smile", "acting_ja": "得意げに切る"}
+      ],
+      "balloons": [{"speaker": "saki", "type": "normal", "text": "余裕余裕"}],
+      "sfx": [{"text": "トントン"}]
+    },
+    {
+      "role": "sho",
+      "beat_ja": "フライパンに卵を入れて目を離す",
+      "shot": "full",
+      "angle": "eye-level",
+      "background_en": "The kitchen stove with a frying pan",
+      "cast": [
+        {"id": "saki", "acting_en": "turning away from the stove to look at her phone", "acting_ja": "スマホを見て目を離す"}
+      ],
+      "balloons": [{"speaker": "saki", "type": "normal", "text": "あとは待つだけ"}]
+    },
+    {
+      "role": "ten",
+      "beat_ja": "煙が出て慌てる",
+      "shot": "closeup",
+      "angle": "low",
+      "background_en": "Thick smoke rising from the frying pan",
+      "effects_en": "Dramatic speed lines",
+      "cast": [
+        {"id": "saki", "acting_en": "panicking with wide eyes, waving the smoke away", "acting_ja": "慌てる"}
+      ],
+      "balloons": [{"speaker": "saki", "type": "shout", "text": "煙!?"}]
+    },
+    {
+      "role": "ketsu",
+      "beat_ja": "黒こげのオムライスを、同居人がおいしそうに食べる",
+      "shot": "medium",
+      "angle": "eye-level",
+      "background_en": "A small dining table in warm evening light, a burnt black omelette rice on a plate",
+      "cast": [
+        {"id": "haru", "acting_en": "eating the burnt omelette rice happily with a gentle smile", "acting_ja": "おいしそうに食べる"},
+        {"id": "saki", "acting_en": "sitting across the table, blushing and embarrassed", "acting_ja": "照れる"}
+      ],
+      "balloons": [{"speaker": "haru", "type": "normal", "text": "香ばしいね"}]
+    }
+  ]
+}

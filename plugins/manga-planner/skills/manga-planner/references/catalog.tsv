@@ -1,0 +1,118 @@
+category	key	ja_name	description	en
+genre	gag	ギャグ	日常の「あるある」を極端にして笑わせる
+genre	daily	日常	季節・食べ物・家事など身近な出来事
+genre	romcom	ラブコメ	近づきそうで近づかない2人の距離
+genre	explainer	解説	困りごとと解決策を絵で見せる
+genre	drama	ちょっとシリアス	静かな事実と余韻で見せる
+genre	fantasy	ファンタジー	魔法や不思議な生き物がいる世界の小さな事件
+genre	sf	SF	ロボットや未来の道具が日常に入りこむ
+genre	mystery	ミステリー風	小さな謎と、意外な犯人（たいてい身近）
+genre	horror-lite	ちょっとホラー	怖そうで怖くない。最後に気が抜ける
+genre	sports	スポーツ	練習や試合の一場面。熱さと失敗
+genre	work	お仕事	職場の困りごとや、仕事あるある
+genre	school	学園	授業・部活・放課後の出来事
+genre	animals	動物	ペットや野生の動物が主役か準主役
+genre	gourmet	グルメ	食べ物への情熱と、その結末
+ending	boke	ボケ	主人公のずれた行動・勘違いが結果になる
+ending	reversal	どんでん返し	立場や結果がひっくり返る
+ending	wholesome	ほっこり	小さな失敗のあとに、やさしい結末
+ending	tsukkomi	ツッコミ	2人目が冷静に指摘して落とす
+ending	tendon	天丼	同じことを3回くり返し、3回目で少し外す
+ending	misunderstanding	勘違い	最後に勘違いだったと分かる
+ending	meta	メタ	キャラが読者や作者に話しかけて落とす
+ending	silent	無言オチ	最後のコマは台詞なし。絵だけで笑わせる
+ending	karma	自業自得	ずるをした本人に返ってくる
+ending	escalate	エスカレート	騒ぎがどんどん大きくなって収拾がつかない
+ending	one-liner	一言オチ	最後の決め台詞ひとつで落とす
+ending	loop	ループ	最後に1コマ目と同じ状況に戻る
+ending	surprise-guest	予想外の登場	最後に意外な人物や動物が出てくる
+theme	oversleep	寝坊	目覚ましとの戦い
+theme	remote-work	在宅勤務	家で働くあるある
+theme	cooking	自炊	はじめての料理と失敗
+theme	rain	雨の日	傘・ずぶ濡れ・雨宿り
+theme	cat	猫	気まぐれな猫に振り回される
+theme	dog	犬	まっすぐな犬に振り回される
+theme	shopping	買い物	特売・衝動買い・袋が足りない
+theme	diet	ダイエット宣言	宣言した日から誘惑が来る
+theme	cleaning	大掃除	片づけのつもりが思い出に浸る
+theme	moving	引っ越し	段ボールの山と、見つからない物
+theme	hatsumode	初詣	おみくじと人混み
+theme	hanami	花見	場所取りと桜と風
+theme	festival	夏祭り	屋台・浴衣・金魚すくい
+theme	beach	海	日焼け・砂・波
+theme	snow	雪の日	雪だるま・転ぶ・雪かき
+theme	kotatsu	こたつ	出られない冬の魔物
+theme	birthday	誕生日	サプライズの準備がばれそう
+theme	gift	プレゼント選び	相手の好みが分からない
+theme	oshikatsu	推し活	グッズ・ライブ・布教
+theme	game	ゲーム	あと1回だけ、が終わらない
+theme	battery	スマホの充電	残り1%の緊張
+theme	train	電車	寝過ごし・満員・乗り換え
+theme	bicycle	自転車	坂道と向かい風
+theme	plants	植物を育てる	水やりと、育ちすぎ
+theme	photo	写真撮影	いい瞬間ほど撮れない
+theme	workout	筋トレ	三日坊主との戦い
+theme	homework	宿題	夏休み最終日
+theme	exam	テスト勉強	机の片づけから始めてしまう
+theme	confession	告白	言おうとすると邪魔が入る
+theme	meetup	待ち合わせ	場所の勘違い・遅刻
+theme	lost-item	落とし物	探すと見つからず、あきらめると出てくる
+theme	delivery	宅配便	受け取れない・不在票
+theme	blackout	停電	暗闇で家族が集まる
+theme	cold	風邪	看病する側・される側
+theme	dentist	歯医者	待合室の緊張
+theme	haircut	散髪	思っていた髪型と違う
+theme	ai-assistant	AIアシスタント	便利すぎて、斜め上に気が利く
+theme	new-gadget	新しい機械	説明書を読まずに使う
+setting	kitchen	台所	家の台所。冷蔵庫とコンロ
+setting	classroom	教室	黒板と机が並ぶ教室
+setting	office	オフィス	デスクとパソコンが並ぶ職場
+setting	station	駅のホーム	電車を待つホーム
+setting	konbini	コンビニ	明るい店内とレジ
+setting	park	公園	ベンチと木と遊具
+setting	shotengai	商店街	昔ながらの店が並ぶ通り
+setting	seaside	海辺	砂浜と波打ち際
+setting	snowy-street	雪の道	雪が積もった住宅街
+setting	library	図書館	静かな本棚の間
+setting	cafe	カフェ	窓ぎわの席とカップ
+setting	washitsu	和室	畳とふすまと縁側
+setting	balcony	夜のベランダ	街の灯りと夜空
+setting	amusement-park	遊園地	観覧車とジェットコースター
+setting	waiting-room	待合室	長いすと呼び出しの番号
+setting	spaceship	宇宙船の中	窓の外に星と惑星
+setting	magic-school	魔法学校	古い石造りの教室と浮かぶ本
+setting	mountain-top	山の頂上	雲の上の景色と山小屋
+setting	sento	銭湯	富士山の壁画と湯船
+setting	rooftop	屋上	フェンスと青空
+twist	animal-did-it	動物のしわざ	犯人は身近な動物だった
+twist	same-thought	同じことを考えていた	相手も同じことをしていた
+twist	size-mixup	大きさの勘違い	思っていたよりずっと大きい／小さい
+twist	time-mixup	時間の勘違い	日付や時間をまちがえていた
+twist	broken-tool	道具が壊れている	頼りの道具がいざという時に使えない
+twist	role-swap	立場の逆転	助ける側と助けられる側が入れ替わる
+twist	watched	見られていた	誰もいないと思ったら見られていた
+twist	inner-voice	本音が声に出ていた	心の声のつもりが口に出ていた
+twist	wasted-prep	準備がムダになる	がんばった準備が全部いらなくなる
+twist	tiny-hero	小さな活躍	いちばん小さい者が事件を解決する
+twist	gap	想像と現実のギャップ	思い描いた姿と現実が違いすぎる
+twist	past-self	過去の自分の仕込み	昔の自分がしたことが返ってくる
+twist	weather	天気の急変	晴れから急に雨や雪になる
+twist	manual	説明書を読んでいなかった	答えは最初から書いてあった
+twist	same-gift	同じ物を買っていた	2人とも同じ物を用意していた
+twist	literal-wish	願いが斜め上に叶う	頼みごとが文字どおりに叶ってしまう
+twist	too-perfect	完璧すぎて困る	うまくいきすぎて逆に困る
+twist	rule-follower	ルールを守りすぎる	まじめすぎて話がずれる
+twist	moving-object	物が勝手に動く	犯人は風・磁石・ルンバなど
+twist	everyone-knew	みんな知っていた	秘密のつもりが全員知っていた
+style	mono-tone	モノクロ＋トーン（王道）	きれいな線とグレーのトーン	Clean black ink line art with light gray screentone shading, simple expressive faces
+style	shoujo	少女漫画風	細い線、花とキラキラのトーン	Delicate thin ink lines with floral screentone accents and sparkles, gentle shoujo manga style
+style	gekiga	劇画調	太い線と濃い影	Bold heavy ink lines with dramatic crosshatching and deep shadows, gekiga manga style
+style	doodle	ゆるい落書き風	まるい線、簡単な顔	Loose rounded doodle line art with very simple cute faces and minimal shading
+style	anime-color	アニメ塗りフルカラー	くっきりした影のカラー	Vibrant full-color anime cel shading with crisp line art
+style	watercolor	水彩絵本風	にじんだ色とやわらかい線	Soft watercolor picture-book illustration with gentle pencil lines and warm colors
+style	colored-pencil	色鉛筆風	手描きのあたたかい色	Warm colored-pencil illustration with visible pencil strokes and soft pastel colors
+style	retro	昭和レトロ	少しくすんだ色とレトロな線	Retro 1970s Japanese manga style with slightly faded colors and halftone dots
+style	newspaper	新聞4コマ風	シンプルな線、少ない背景	Simple clean newspaper comic strip line art with minimal backgrounds
+style	lineart	線画のみ	白黒、影なし	Pure black and white line art with no shading or screentone
+style	pencil	鉛筆スケッチ	ラフな鉛筆の線	Rough graphite pencil sketch style with soft gray tones
+style	pastel	パステル	淡い色とやさしい影	Soft pastel full-color illustration with light airy shading

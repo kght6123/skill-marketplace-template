@@ -1,0 +1,87 @@
+{
+  "format": "yonkoma",
+  "layout": "yonkoma-title",
+  "title": "ねこ撮影",
+  "genre": "gag",
+  "ending": "reversal",
+  "color": "monochrome",
+  "style_en": "Clean black ink line art with light gray screentone shading, simple expressive faces",
+  "characters": [
+    {
+      "id": "mina",
+      "name": "ミナ",
+      "look_ja": "黒髪ショートボブ、白いパーカー、スマホを持つ",
+      "look_en": "a young woman with a short dark bob haircut, a white hoodie and a smartphone"
+    },
+    {
+      "id": "cat",
+      "name": "ねこ",
+      "look_ja": "ふわふわの茶トラ猫",
+      "look_en": "a small fluffy orange tabby cat"
+    }
+  ],
+  "panels": [
+    {
+      "role": "ki",
+      "beat_ja": "塀の上の猫を見つけてスマホを構える",
+      "shot": "long",
+      "angle": "eye-level",
+      "background_en": "A quiet residential street with a low concrete wall in soft afternoon light",
+      "cast": [
+        {"id": "mina", "acting_en": "spotting the cat with wide sparkling eyes, holding her smartphone up excitedly", "acting_ja": "目を輝かせてスマホを構える"},
+        {"id": "cat", "acting_en": "sitting calmly on top of the wall", "acting_ja": "塀の上で座っている"}
+      ],
+      "balloons": [
+        {"speaker": "mina", "type": "normal", "text": "いた…！"}
+      ]
+    },
+    {
+      "role": "sho",
+      "beat_ja": "忍び足で近づく",
+      "shot": "full",
+      "angle": "eye-level",
+      "background_en": "Closer view of the same concrete wall",
+      "cast": [
+        {"id": "mina", "acting_en": "tiptoeing toward the cat in an exaggerated sneaking pose, crouched low, phone held out with both hands, a small sweat drop near her head", "acting_ja": "忍び足、冷や汗"},
+        {"id": "cat", "acting_en": "curled up with eyes half closed", "acting_ja": "うとうと"}
+      ],
+      "balloons": [
+        {"speaker": "mina", "type": "whisper", "text": "そーっと…"}
+      ],
+      "sfx": [
+        {"text": "ソロ…"}
+      ]
+    },
+    {
+      "role": "ten",
+      "beat_ja": "猫が飛びかかってくる",
+      "shot": "medium",
+      "angle": "low",
+      "background_en": "Plain background",
+      "effects_en": "Dramatic radial speed lines",
+      "cast": [
+        {"id": "mina", "acting_en": "recoiling in shock with a startled face, phone nearly slipping from her hand", "acting_ja": "のけぞって驚く"},
+        {"id": "cat", "acting_en": "leaping through the air toward her with legs spread", "acting_ja": "飛びかかる"}
+      ],
+      "balloons": [
+        {"speaker": "mina", "type": "shout", "text": "えっ!?"}
+      ],
+      "sfx": [
+        {"text": "バッ"}
+      ]
+    },
+    {
+      "role": "ketsu",
+      "beat_ja": "頭に猫を乗せたまま自撮り",
+      "shot": "bust",
+      "angle": "eye-level",
+      "background_en": "Plain light background with a few sparkle accents",
+      "cast": [
+        {"id": "mina", "acting_en": "front-facing selfie pose with a deadpan, slightly defeated expression, while the orange tabby cat sits contentedly on top of her head looking at the camera", "acting_ja": "真顔で自撮り（頭に猫）"}
+      ],
+      "balloons": [
+        {"speaker": "mina", "type": "normal", "text": "…撮れた"}
+      ]
+    }
+  ]
+}

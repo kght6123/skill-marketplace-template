@@ -90,6 +90,12 @@
       "source": "./plugins/outfit-picker",
       "category": "creative",
       "description": "AIイラスト（Anima / SDXL / Illustrious / NoobAI / waiANIMA）で描く成人女性キャラの服装を、Danbooruの衣装タグからランダム提案→選ぶかスキップを繰り返すだけで決められる対話型スキル"
+    },
+    {
+      "name": "manga-planner",
+      "source": "./plugins/manga-planner",
+      "category": "creative",
+      "description": "漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ・1ページ・2ページ漫画（起承転結・コマ割り・ショット・台詞・吹き出し）を設計できる対話型スキル。設計書とネーム画像を作り、MOSS-Image 用の Layout 下書きに変換する"
     }
   ]
 }
