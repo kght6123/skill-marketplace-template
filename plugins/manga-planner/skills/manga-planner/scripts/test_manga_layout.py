@@ -226,6 +226,31 @@ class PageTests(unittest.TestCase):
         self.assertEqual((draft["width"], draft["height"]), (1440, 2032))
 
 
+class SquarePageTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+        self.spec = load_example()  # 4コマの作例を正方形1ページに流し込む
+        self.spec["format"] = "page"
+        del self.spec["title"]
+
+    def test_sns_template_has_four_square_panels(self):
+        panels = self.layouts["page-square-4"]["pages"][0]["panels"]
+        sizes = {(b[2] - b[0], b[3] - b[1]) for b in panels}
+        self.assertEqual(len(panels), 4)
+        self.assertEqual(len(sizes), 1)
+        w, h = sizes.pop()
+        self.assertEqual(w, h)
+
+    def test_four_panel_story_fits_every_square_template(self):
+        for name in ("page-square-4", "page-square-big-ending-4", "page-square-big-opening-4"):
+            with self.subTest(layout=name):
+                self.spec["layout"] = name
+                self.assertEqual(M.check(self.spec, self.layouts)[0], [])
+                draft = M.moss_draft(self.spec, self.layouts)
+                self.assertEqual((draft["width"], draft["height"]), (1536, 1536))
+                self.assertIn("single square Japanese manga page", draft["summary"]["caption"])
+
+
 class SpreadTests(unittest.TestCase):
     def setUp(self):
         self.layouts = M.load_layouts()
@@ -284,6 +309,52 @@ class SpreadTests(unittest.TestCase):
         self.assertIn('x1="1152"', svg)
 
 
+PICK = importlib.util.spec_from_file_location("pick", HERE / "pick.py")
+P = importlib.util.module_from_spec(PICK)
+PICK.loader.exec_module(P)
+
+
+class PickTests(unittest.TestCase):
+    def test_catalog_is_large_enough_and_keys_are_unique(self):
+        rows = P.load_catalog()
+        minimum = {"genre": 12, "ending": 12, "theme": 30, "setting": 15, "twist": 15, "style": 10}
+        for cat, n in minimum.items():
+            keys = [r["key"] for r in rows if r["category"] == cat]
+            with self.subTest(category=cat):
+                self.assertGreaterEqual(len(keys), n)
+                self.assertEqual(len(keys), len(set(keys)))
+        for r in rows:
+            if r["category"] == "style":
+                self.assertTrue(r["en"] and M.is_ascii(r["en"]), r["key"])
+
+    def test_exclude_is_respected(self):
+        keys = [r["key"] for r in P.load_catalog() if r["category"] == "ending"]
+        picked = P.pick_catalog("ending", 99, set(keys[:5]))
+        self.assertEqual(len(picked), len(keys) - 5)
+        self.assertTrue(all(r["key"] not in keys[:5] for r in picked))
+
+    def test_layout_pick_filters_format_and_square(self):
+        rows = P.pick_layouts("page", 99, set(), square=True)
+        self.assertTrue(rows and all(lay["width"] == lay["height"] for _, lay in rows))
+        rows = P.pick_layouts("page", 99, {"page-basic-6"}, square=False)
+        self.assertTrue(all(k != "page-basic-6" and lay["width"] != lay["height"] for k, lay in rows))
+
+    def test_generated_spreads_cover_every_page_pair(self):
+        layouts = M.load_layouts()
+        pages = [k for k, v in layouts.items() if v["format"] == "page" and v["width"] != v["height"]]
+        spreads = [k for k, v in layouts.items() if v.get("generated")]
+        self.assertGreaterEqual(len(pages), 10)
+        self.assertGreaterEqual(len(spreads) + 4, len(pages) ** 2)
+
+    def test_wide_yonkoma_caption_reads_right_to_left(self):
+        spec = load_example()
+        spec["layout"] = "yonkoma-wide"
+        del spec["title"]
+        layouts = M.load_layouts()
+        self.assertEqual(M.check(spec, layouts)[0], [])
+        self.assertIn("read from right to left", M.moss_draft(spec, layouts)["summary"]["caption"])
+
+
 class OutputTests(unittest.TestCase):
     def setUp(self):
         self.layouts = M.load_layouts()
@@ -308,6 +379,24 @@ class OutputTests(unittest.TestCase):
             with self.subTest(example=name.name):
                 result = json.loads(compiler.compile_prompt(M.moss_draft(spec, self.layouts)))
                 self.assertEqual(result["bbox_format"], "yxyx")
+
+    def test_thought_balloon_is_a_cloud(self):
+        self.spec["panels"][0]["balloons"][0]["type"] = "thought"
+        pl = M.place(self.spec, self.layouts["yonkoma-title"])[0]
+        svg = "".join(M.panel_svg(pl))
+        self.assertGreaterEqual(svg.count("<circle"), 10)  # 縁の円8個以上＋しっぽの丸2個
+        self.assertNotRegex(svg, r'<ellipse[^>]*stroke="#000"')  # 普通の楕円の吹き出しを描いていない
+
+    def test_long_notes_are_shortened_inside_the_panel(self):
+        long_note = "とても長い注記がここに入ってコマの幅をこえてしまう場合のテスト用の文章です"
+        self.spec["panels"][0]["cast"][0]["acting_ja"] = long_note
+        self.spec["panels"][0]["beat_ja"] = long_note * 2
+        pl = M.place(self.spec, self.layouts["yonkoma-title"])[0]
+        svg = "".join(M.panel_svg(pl))
+        self.assertIn("…</text>", svg)
+        self.assertIn(f"<title>{long_note}</title>", svg)
+        x0, _, x1, _ = pl["figures"][0]["bbox"]
+        self.assertLessEqual(M.text_width(M.fit_text(long_note, x1 - x0 - 12, 18), 18), x1 - x0 - 12)
 
     def test_preview_escapes_text(self):
         self.spec["panels"][0]["balloons"][0]["text"] = "<&>"
