@@ -5,6 +5,7 @@
   python3 -I manga_layout.py check   spec.json
   python3 -I manga_layout.py preview spec.json --output name.svg
   python3 -I manga_layout.py moss    spec.json --output moss-draft.json
+  python3 -I manga_layout.py h3image spec.json --output h3-image.md
 
 標準ライブラリだけで動く。コマの位置は assets/layouts.json のテンプレートから決め、
 吹き出しとキャラの箱はこのスクリプトが日本式の読み順（右→左、上→下）で配置する。
@@ -517,6 +518,235 @@ def panel_items(n, pl):
     return items
 
 
+# ---------------------------------------------------------------- H3-Image プロンプト
+
+H3_PIXELS = 4096 * 4096        # minimax-h3-image-prompt-craft の推奨（16MP）
+H3_RATIO_MIN, H3_RATIO_MAX = 1 / 3, 3
+H3_SOFT_CHARS = 12000          # プロンプトは 4096 トークンで切られる。その手前の目安
+H3_MAX_REFS = 16               # 参照画像の上限
+
+BALLOON_H3 = {
+    "normal": "a white oval speech bubble with a thin black outline",
+    "whisper": "a small white speech bubble with a dotted outline for whispering",
+    "shout": "a large spiky shout-style speech bubble with a jagged black outline",
+    "thought": "a cloud-shaped thought bubble with small trailing circles",
+    "narration": "a rectangular narration box with a thin black border and white fill",
+}
+
+
+def ratio_label(w, h):
+    """幅:高さを短い整数比で返す。きれいに割れなければ近い小さな比に「約」を付ける。"""
+    from math import gcd
+    g = gcd(w, h)
+    a, b = w // g, h // g
+    if max(a, b) <= 32:
+        return f"{a}:{b}"
+    r = w / h
+    best = min(((x, y) for x in range(1, 11) for y in range(1, 11)), key=lambda t: abs(t[0] / t[1] - r))
+    return f"約 {best[0]}:{best[1]}"
+
+
+def h3_size_errors(layout_id, layout, layouts):
+    """H3-Image の縦横比（1:3〜3:1）に入らないテンプレートならエラー文を返す。"""
+    r = layout["width"] / layout["height"]
+    if H3_RATIO_MIN <= r <= H3_RATIO_MAX:
+        return []
+    near = [k for k, v in layouts.items() if v["format"] == layout["format"] and not v.get("generated")
+            and H3_RATIO_MIN <= v["width"] / v["height"] <= H3_RATIO_MAX]
+    return [f"spec: layout '{layout_id}' は縦横比 {ratio_label(layout['width'], layout['height'])} で、"
+            f"H3-Image の 1:3〜3:1 に入りません（候補: {', '.join(near) or 'なし'}）"]
+
+
+def h3_size(layout):
+    """テンプレートの縦横比のまま約16MP・両辺32の倍数。折り目があれば幅を64の倍数にして左右を同じ幅にする。"""
+    w, h = layout["width"], layout["height"]
+    r = w / h
+    H = (H3_PIXELS / r) ** 0.5
+    wstep = 64 if layout.get("fold") else 32
+    return round(H * r / wstep) * wstep, round(H / 32) * 32
+
+
+def where_en(box, area):
+    """area（ページの範囲）の中で box がどこにあり、どれくらいの大きさかを英語で返す。"""
+    ax0, ay0, ax1, ay1 = area
+    x0, y0, x1, y1 = box
+    wf, hf = (x1 - x0) / (ax1 - ax0), (y1 - y0) / (ay1 - ay0)
+    cx, cy = ((x0 + x1) / 2 - ax0) / (ax1 - ax0), ((y0 + y1) / 2 - ay0) / (ay1 - ay0)
+    if hf > 0.8:
+        v = ""
+    else:
+        v = ("top" if cy < 0.2 else "upper" if cy < 0.4 else "middle" if cy < 0.6
+             else "lower" if cy < 0.8 else "bottom")
+    if wf > 0.8:
+        part = v if v in ("top", "middle", "bottom") else f"{v} part"
+        pos = f"across the full width at the {part}" if v else "filling the whole area"
+    else:
+        hpos = "right" if cx > 0.6 else ("left" if cx < 0.4 else "center")
+        pos = f"at the {v} {hpos}" if v else f"at the {hpos}, running the full height"
+    return f"{pos}, about {round(wf * 100)}% of the width and {round(hf * 100)}% of the height"
+
+
+def in_panel_en(box, panel):
+    """コマの中の位置（吹き出し・擬音用）。"""
+    px0, py0, px1, py1 = panel
+    x0, y0, x1, y1 = box
+    cx = ((x0 + x1) / 2 - px0) / (px1 - px0)
+    cy = ((y0 + y1) / 2 - py0) / (py1 - py0)
+    h = "right" if cx > 0.6 else ("left" if cx < 0.4 else "center")
+    v = "upper" if cy < 0.4 else ("lower" if cy > 0.6 else "middle")
+    return f"{h} side of the panel" if v == "middle" else f"{v} {h} of the panel"
+
+
+def page_areas(layout):
+    """ページごとの範囲。2ページは右半分が1ページ目。"""
+    W, H = layout["width"], layout["height"]
+    if layout.get("fold"):
+        return [(W // 2, 0, W, H), (0, 0, W // 2, H)]
+    return [(0, 0, W, H)]
+
+
+def quote(text):
+    """画面に出る文字を引用符で囲む。改行があれば行ごとに囲み、行の順を言葉で伝える。"""
+    lines = text.split("\n")
+    if len(lines) == 1:
+        return f'"{text}"'
+    return f"in {len(lines)} lines: " + ", then ".join(f'"{s}"' for s in lines)
+
+
+def h3_refs(spec):
+    """参照画像（characters[].ref_image）を渡す順に返す。[(Picture番号, character), …]"""
+    refs = [c for c in spec["characters"] if c.get("ref_image")]
+    return [(k + 1, c) for k, c in enumerate(refs)]
+
+
+def h3image_prompt(spec, layouts):
+    """MiniMax-H3-Image 用の英文プロンプトを返す。(prompt, (width, height), refs)"""
+    layout = layouts[spec["layout"]]
+    placed = place(spec, layout)
+    titles = titles_of(spec, layout)
+    color = spec.get("color", "monochrome")
+    refs = h3_refs(spec)
+    subject = {c["id"]: f"<Subject {n}>" for n, c in refs}
+    areas = page_areas(layout)
+    spans = set(spanning_panels(layout))
+
+    def who(cid):
+        c = next(c for c in spec["characters"] if c["id"] == cid)
+        return subject.get(cid) or c["look_en"].rstrip(".")
+
+    paras = []
+    # 1. 参照の定義と関係（参照画像があるときだけ。H3 の Edit の書き方）
+    if refs:
+        defs = " ".join(f"The character in <Picture {n}> is <Subject {n}>." for n, _ in refs)
+        rel = " ".join(
+            f"<Subject {n}> is partially preserved; their face, hairstyle, hair color and outfit remain "
+            f"while their pose, expression, scale and placement change in each panel." for n, _ in refs)
+        paras.append(f"{defs} The target image is a new Japanese manga artwork featuring the referenced characters. {rel}")
+
+    # 2. 何の画像か・全体のレイアウト
+    head = canvas_description(spec["format"], layout, len(titles))
+    if titles:
+        slots = title_slots(layout)
+        tt = []
+        for (pi, box), t in zip(slots, titles):
+            if spec["format"] == "hachikoma":
+                at = "at the top of the " + ("right" if box[0] > layout["width"] / 2 else "left") + " strip"
+            else:
+                at = where_en(box, areas[pi]).split(",")[0]
+            tt.append(f"the title {quote(t)} in bold black lettering {at}")
+        head += " The page shows " + " and ".join(tt) + ", with no backing panel."
+    paras.append(head)
+
+    # 3. 画風・色・キャラ
+    others = [c for c in spec["characters"] if c["id"] not in subject]
+    looks = "; ".join(c["look_en"].rstrip(".") for c in others)
+    style = (f"{spec['style_en'].rstrip('.')}. "
+             f"{'Black and white ink with gray screentone' if color == 'monochrome' else 'Full color'}. ")
+    if looks:
+        style += f"Each character keeps the same design in every panel: {looks}."
+    else:
+        style += "Each character keeps the same design in every panel."
+    paras.append(style.strip())
+
+    # 4. コマごと（読む順）
+    for pl in placed:
+        p = pl["panel"]
+        n = pl["index"] + 1
+        if pl["index"] in spans:
+            full = where_en(pl["bbox"], (0, 0, layout["width"], layout["height"]))
+            place_txt = (full.replace("across the full width", "across both pages over the center fold", 1)
+                         if full.startswith("across the full width") else "over the center fold " + full)
+        else:
+            place_txt = where_en(pl["bbox"], areas[pl["page"]])
+            page_txt = f" of page {pl['page'] + 1}" if len(areas) > 1 else ""
+            place_txt = place_txt.replace(",", page_txt + ",", 1)
+        s = (f"Panel {n} ({ROLE_EN[p['role']]}) sits {place_txt}. It is a rectangular panel with a thick black border, "
+             f"framed as a {SHOT_EN[p['shot']]}, {ANGLE_EN[p.get('angle', 'eye-level')]}.")
+        for extra in (p.get("background_en"), p.get("effects_en")):
+            if extra:
+                s += " " + extra.rstrip(".") + "."
+        for f in pl["figures"]:
+            side = f" on the {f['side']} side" if f["side"] else ""
+            name = who(f["member"]["id"])
+            s += f" {name[0].upper()}{name[1:]} appears{side}, {f['member']['acting_en'].rstrip('.')}."
+        for bl in pl["balloons"]:
+            b = bl["balloon"]
+            btype = b.get("type", "normal")
+            if btype == "narration":
+                tail = ""
+            elif bl["speaker_side"]:
+                tail = f", its tail pointing to the character on the {bl['speaker_side']},"
+            else:
+                tail = ", its tail pointing to the speaker,"
+            s += (f" At the {in_panel_en(bl['bbox'], pl['bbox'])}, {BALLOON_H3[btype]}{tail} "
+                  f"contains the Japanese manga lettering {quote(b['text'])}.")
+        for sx in pl["sfx"]:
+            how = (sx["sfx"].get("caption_en") or "bold hand-drawn Japanese lettering, slightly tilted, "
+                   "with no bubble").rstrip(".")
+            s += (f" At the {in_panel_en(sx['bbox'], pl['bbox'])}, the sound effect {quote(sx['sfx']['text'])} "
+                  f"appears as {how[0].lower()}{how[1:]}.")
+        paras.append(s)
+
+    # 5. 文字のしめ
+    paras.append("Speech bubbles read from right to left within each panel. Apart from the quoted lettering, "
+                 "the image contains no other text, letters, numbers or panel numbers.")
+    return "\n\n".join(paras), h3_size(layout), refs
+
+
+def h3_errors(spec, layouts):
+    """H3-Image に変換するときだけの検査。"""
+    errors = h3_size_errors(spec["layout"], layouts[spec["layout"]], layouts)
+    for i, c in enumerate(spec["characters"]):
+        ref = c.get("ref_image")
+        if ref is not None and not (isinstance(ref, str) and ref):
+            errors.append(f"characters[{i}]: ref_image は画像ファイルのパス（文字列）にしてください")
+    if len(h3_refs(spec)) > H3_MAX_REFS:
+        errors.append(f"spec: 参照画像は {H3_MAX_REFS} 枚までです")
+    return errors
+
+
+def h3_warnings(spec, layouts):
+    prompt, _, _ = h3image_prompt(spec, layouts)
+    if len(prompt) > H3_SOFT_CHARS:
+        return [f"H3-Image のプロンプトが {len(prompt)} 字あります。4096 トークンで切られるので、"
+                "acting_en や background_en を短くすると安全です"]
+    return []
+
+
+def h3image_markdown(spec, layouts):
+    """minimax-h3-image-prompt-craft の出力形式（コードブロック＋比＋推奨サイズ）。"""
+    prompt, (w, h), refs = h3image_prompt(spec, layouts)
+    layout = layouts[spec["layout"]]
+    lines = ["```text", prompt, "```", "",
+             f"Aspect ratio: {ratio_label(layout['width'], layout['height'])}",
+             f"推奨サイズ: {w}x{h}"]
+    for n, c in refs:
+        lines.append(f"参照画像: <Picture {n}> = {c['ref_image']}（{c['name']}）")
+    if layout.get("fold"):
+        lines.append(f"生成後: 中央で左右に切る（右半分 {w // 2}x{h} が1ページ目、左半分が2ページ目）")
+    return "\n".join(lines) + "\n"
+
+
 # ---------------------------------------------------------------- ネーム（SVG）
 
 def text_width(text, size):
@@ -637,7 +867,7 @@ def panel_svg(pl):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["check", "preview", "moss"])
+    ap.add_argument("command", choices=["check", "preview", "moss", "h3image"])
     ap.add_argument("spec")
     ap.add_argument("--output", "-o")
     args = ap.parse_args(argv)
@@ -646,6 +876,10 @@ def main(argv=None):
         spec = json.load(f)
     layouts = load_layouts()
     errors, warnings = check(spec, layouts)
+    if args.command == "h3image" and not errors:
+        errors.extend(h3_errors(spec, layouts))
+        if not errors:
+            warnings.extend(h3_warnings(spec, layouts))
     for w in warnings:
         print(f"注意: {w}", file=sys.stderr)
     for e in errors:
@@ -658,6 +892,8 @@ def main(argv=None):
 
     if args.command == "preview":
         data = preview_svg(spec, layouts)
+    elif args.command == "h3image":
+        data = h3image_markdown(spec, layouts)
     else:
         data = json.dumps(moss_draft(spec, layouts), ensure_ascii=False, indent=2) + "\n"
     if args.output:

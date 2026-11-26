@@ -62,10 +62,10 @@
   },
   {
     "id": "test-03-unsupported-target",
-    "prompt": "この4コマをMiniMax-H3-Imageで生成したい",
+    "prompt": "この4コマをH3で動画にしたい",
     "checks": [
-      "H3-Image への出力はまだないと伝えている",
-      "MOSS 用で作るかどうかを聞いている"
+      "H3（動画）への出力はまだないと伝えている",
+      "静止画を H3-Image か MOSS で作るかを聞いている"
     ]
   },
   {
@@ -111,6 +111,25 @@
       "ネタ案3つで、題材・舞台・転の仕掛けの組み合わせが違う",
       "「別の3案」で、出した材料を除外して引き直している",
       "画風の選択肢を pick.py で引き、style_en に en 列を使っている"
+    ]
+  },
+  {
+    "id": "test-h3-image",
+    "prompt": "1ページ漫画を作って、MiniMax-H3-Imageで生成したい",
+    "checks": [
+      "Step 7 で出力先を聞かずに H3-Image を使っている（会話にモデルが出ているため）",
+      "manga_layout.py h3image で h3-image.md を作っている",
+      "プロンプトが英文で、台詞・擬音が日本語のまま引用符に入っている",
+      "Aspect ratio と推奨サイズをプロンプトの外に書いている",
+      "ComfyUI では prompt expander を OFF にするよう伝えている"
+    ]
+  },
+  {
+    "id": "test-h3-image-out-of-range",
+    "prompt": "横4コマのバナーをH3-Imageで作りたい",
+    "checks": [
+      "yonkoma-wide は H3-Image の比に入らないことを伝えている",
+      "縦4コマに変えるか、MOSS で作るかを選択肢で聞いている"
     ]
   }
 ]

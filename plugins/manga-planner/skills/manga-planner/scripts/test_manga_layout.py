@@ -405,5 +405,103 @@ class OutputTests(unittest.TestCase):
         self.assertTrue(svg.startswith("<svg"))
 
 
+class H3ImageTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+
+    def examples(self):
+        for name in sorted(EXAMPLES.glob("*.spec.json")):
+            yield name.name, json.loads(name.read_text(encoding="utf-8"))
+
+    def test_size_keeps_ratio_at_16mp(self):
+        for name, lay in self.layouts.items():
+            if M.h3_size_errors(name, lay, self.layouts):
+                continue
+            with self.subTest(layout=name):
+                w, h = M.h3_size(lay)
+                self.assertEqual(w % 32, 0)
+                self.assertEqual(h % 32, 0)
+                self.assertLess(abs(w * h / M.H3_PIXELS - 1), 0.03)
+                self.assertLess(abs((w / h) / (lay["width"] / lay["height"]) - 1), 0.015)
+                if lay.get("fold"):
+                    self.assertEqual((w // 2) % 32, 0)  # 中央で切ると左右が同じ幅になる
+
+    def test_out_of_range_ratio_is_an_error(self):
+        for name in ("yonkoma-slim", "yonkoma-wide"):
+            with self.subTest(layout=name):
+                errs = M.h3_size_errors(name, self.layouts[name], self.layouts)
+                self.assertEqual(len(errs), 1)
+                self.assertIn("1:3〜3:1", errs[0])
+        self.assertEqual(M.h3_size_errors("page-basic-6", self.layouts["page-basic-6"], self.layouts), [])
+
+    def test_lettering_is_quoted_verbatim(self):
+        for name, spec in self.examples():
+            with self.subTest(example=name):
+                prompt, _, refs = M.h3image_prompt(spec, self.layouts)
+                self.assertEqual(refs, [])
+                for p in spec["panels"]:
+                    for b in p.get("balloons", []):
+                        for line in b["text"].split("\n"):
+                            self.assertIn(f'"{line}"', prompt)
+                    for x in p.get("sfx", []):
+                        self.assertIn(f'"{x["text"]}"', prompt)
+                for t in M.titles_of(spec, self.layouts[spec["layout"]]):
+                    self.assertIn(f'"{t}"', prompt)
+                self.assertIn(f"Panel {len(spec['panels'])} ", prompt)
+                self.assertTrue(prompt.endswith("no other text, letters, numbers or panel numbers."))
+                self.assertNotIn("bbox", prompt)
+                self.assertLess(len(prompt), M.H3_SOFT_CHARS)
+
+    def test_markdown_follows_h3_skill_format(self):
+        spec = json.loads((EXAMPLES / "neko-satsuei.spec.json").read_text(encoding="utf-8"))
+        md = M.h3image_markdown(spec, self.layouts)
+        self.assertTrue(md.startswith("```text\n"))
+        self.assertIn("\nAspect ratio: 3:8\n", md)
+        self.assertRegex(md, r"推奨サイズ: \d+x\d+")
+
+    def test_spread_is_cut_in_half_and_names_pages(self):
+        spec = json.loads((EXAMPLES / "amagasa.spec.json").read_text(encoding="utf-8"))
+        md = M.h3image_markdown(spec, self.layouts)
+        self.assertIn("of page 1", md)
+        self.assertIn("of page 2", md)
+        self.assertIn("生成後: 中央で左右に切る", md)
+
+    def test_spanning_panel_crosses_the_fold(self):
+        spec = json.loads((EXAMPLES / "amagasa.spec.json").read_text(encoding="utf-8"))
+        spec["layout"], spec["page_turn"] = "spread-climax-8", "spread"
+        spec["panels"] = spec["panels"][:7] + spec["panels"][-1:]
+        self.assertEqual(M.check(spec, self.layouts)[0], [])
+        prompt, _, _ = M.h3image_prompt(spec, self.layouts)
+        self.assertIn("Panel 8 (punchline) sits across both pages over the center fold", prompt)
+
+    def test_reference_image_uses_edit_wording(self):
+        spec = load_example()
+        spec["characters"][0]["ref_image"] = "mina.png"
+        prompt, _, refs = M.h3image_prompt(spec, self.layouts)
+        self.assertEqual([n for n, _ in refs], [1])
+        self.assertTrue(prompt.startswith("The character in <Picture 1> is <Subject 1>."))
+        self.assertIn("<Subject 1> is partially preserved", prompt)
+        self.assertIn("<Subject 1> appears on the right side", prompt)
+        self.assertIn("a small fluffy orange tabby cat", prompt)  # 参照のないキャラは言葉で書く
+        md = M.h3image_markdown(spec, self.layouts)
+        self.assertIn("参照画像: <Picture 1> = mina.png（ミナ）", md)
+        spec["characters"][1]["ref_image"] = ""
+        self.assertTrue(M.h3_errors(spec, self.layouts))
+
+    def test_cli_rejects_out_of_range_layout(self):
+        import contextlib, io, tempfile
+        spec = load_example()
+        spec.pop("title")
+        spec["layout"] = "yonkoma-slim"
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "spec.json"
+            path.write_text(json.dumps(spec, ensure_ascii=False), encoding="utf-8")
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(M.main(["h3image", str(path)]), 1)
+                self.assertEqual(M.main(["moss", str(path)]), 0)  # MOSS はそのまま使える
+            self.assertIn("H3-Image", err.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

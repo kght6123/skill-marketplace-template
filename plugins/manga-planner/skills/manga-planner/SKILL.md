@@ -1,13 +1,13 @@
 ---
 name: manga-planner
-description: 漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ・1ページ・2ページ漫画（起承転結・コマ割り・ショット・台詞・吹き出し・擬音）を設計できる対話型スキル。設計書（spec.json）とネーム画像（SVG）を作り、MOSS-Image 用の Layout 下書きに変換して moss-image-prompt-craft に渡す。ユーザーが「漫画を作りたい」「4コマを作りたい」「4コマ漫画の設計」「8コマ漫画」「1ページ漫画」「2ページ漫画」「見開き」「ネームを作って」「コマ割りを考えて」「漫画の話を考えて」「MOSSで4コマ漫画」「manga planner」などと言ったら必ず使う。画像生成AIで漫画を作る前に、話とコマ割りを固めたいときにも積極的に使う。
+description: 漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ・1ページ・2ページ漫画（起承転結・コマ割り・ショット・台詞・吹き出し・擬音）を設計できる対話型スキル。設計書（spec.json）とネーム画像（SVG）を作り、MOSS-Image 用の Layout 下書き（moss-image-prompt-craft に渡す）か、MiniMax-H3-Image 用の英文プロンプトに変換する。ユーザーが「漫画を作りたい」「4コマを作りたい」「4コマ漫画の設計」「8コマ漫画」「1ページ漫画」「2ページ漫画」「見開き」「ネームを作って」「コマ割りを考えて」「漫画の話を考えて」「MOSSで4コマ漫画」「H3で漫画」「H3-Imageで4コマ」「manga planner」などと言ったら必ず使う。画像生成AIで漫画を作る前に、話とコマ割りを固めたいときにも積極的に使う。
 ---
 
 # 漫画プランナー
 
 ユーザーは漫画に詳しくない。**考えるのは Claude、ユーザーは選ぶだけ**。各ステップで候補を出し、選んでもらって次へ進む。出来上がるのは画像ではなく、モデルに依存しない **漫画の設計書（spec.json）** と、その確認用の **ネーム画像（SVG）** 。生成用のプロンプトは設計書から作る。
 
-現在の対応: **4コマ・8コマ（4コマ×2列）・1ページ・2ページ** ／ 出力先 **MOSS-Image**。MiniMax-H3-Image・H3 への出力はまだない。頼まれたらそう伝え、MOSS 用で作るか聞く。2ページは横長の1枚（2304×1632）で生成し、あとで中央で左右に切る。
+現在の対応: **4コマ・8コマ（4コマ×2列）・1ページ・2ページ** ／ 出力先 **MOSS-Image・MiniMax-H3-Image**。H3（動画）への出力はまだない。頼まれたらそう伝え、静止画を H3-Image か MOSS で作るか聞く。2ページは横長の1枚（2304×1632）で生成し、あとで中央で左右に切る。
 
 ## 選択肢の出し方
 
@@ -101,7 +101,11 @@ python3 -I <このスキルのディレクトリ>/scripts/manga_layout.py previe
 
    出力は format, key, label_ja, note_ja, コマ数。2ページは、1ページのテンプレートの組み合わせ（`spread-<1ページ目>--<2ページ目>`）も出る。コマ数が変わるときは、コマの配分を直して Step 4 の表を見せ直し、Step 6 をやり直す
 
-### Step 7: 生成用に変換する（MOSS-Image）
+### Step 7: 生成用に変換する
+
+出力先を選択肢で聞く: MOSS-Image／MiniMax-H3-Image。会話の中で使うモデルが出ていれば聞かずにそれを使う。
+
+#### MOSS-Image の場合
 
 ```bash
 python3 -I <このスキルのディレクトリ>/scripts/manga_layout.py moss spec.json --output moss-draft.json
@@ -122,7 +126,28 @@ ffmpeg -i spread.png -vf "crop=iw/2:ih:0:0" page2.png
 
 `spread-climax-8` の下半分の大ゴマは、切ると2ページに分かれる（本の見開きと同じ）。
 
-コマ割り・台詞・演出を直すときは、`moss-draft.json` ではなく **spec.json を直して Step 6 から再実行** する（座標はスクリプトが毎回計算し直す）。
+#### MiniMax-H3-Image の場合
+
+```bash
+python3 -I <このスキルのディレクトリ>/scripts/manga_layout.py h3image spec.json --output h3-image.md
+```
+
+`h3-image.md` は minimax-h3-image-prompt-craft の出力形式（英文プロンプトのコードブロック、`Aspect ratio`、`推奨サイズ`）。そのスキルの「最終チェック」で確かめてから渡す。H3-Image には座標を渡せないので、コマの位置・大きさ・読む順、吹き出しと擬音のコマ内の位置を英文で書いている。台詞・擬音・タイトルは日本語のまま引用符に入る。
+
+- 推奨サイズはテンプレートの縦横比のまま約16MP（両辺32の倍数）。メモリが足りなければ比を変えずに約4MPまで下げてよい
+- ComfyUI の公式テンプレートは prompt expander を OFF にする。MiniMax API の T2I は `disable_prompt_enhanced: true` にする
+- 細長4コマ（`yonkoma-slim`, 1:4）と横4コマ（`yonkoma-wide`, 10:3）は H3-Image の 1:3〜3:1 に入らないので、エラーになる。エラーに出た候補のテンプレートに変えて Step 6 からやり直すか、MOSS で作る
+- キャラの立ち絵があれば `characters[].ref_image` にパスを入れる。プロンプトが参照つき（Edit）の書き方になる。出力の「参照画像」の行の順に `<Picture 1>`, `<Picture 2>`… として渡す（ComfyUI は Load Image ノードの順）。立ち絵のないキャラは `look_en` の言葉で描く
+- 2ページは MOSS と同じく横長1枚で生成し、中央で左右に切る（右半分が1ページ目。切る幅は出力の「生成後」の行）
+- 文字が多い画像は結果がぶれるので、2〜4枚出して選ぶ。コマ割りが崩れたら、コマ数の少ないテンプレートにする
+
+そのスキルが入っていなければ、次で入れるよう案内する:
+
+```bash
+npx skills add kght6123/skill-marketplace-template --skill minimax-h3-image-prompt-craft
+```
+
+コマ割り・台詞・演出を直すときは、`moss-draft.json` や `h3-image.md` ではなく **spec.json を直して Step 6 から再実行** する（座標や位置の文はスクリプトが毎回作り直す）。
 
 ## spec の項目
 
@@ -135,7 +160,7 @@ ffmpeg -i spread.png -vf "crop=iw/2:ih:0:0" page2.png
 | `genre` / `ending` | | 記録用（`story-structures.md` の値） |
 | `color` | | `monochrome`（既定）/ `full-color` |
 | `style_en` | ○ | 画風を英語1文 |
-| `characters[]` | ○ | `id`・`name`・`look_ja`・`look_en`。最大3人 |
+| `characters[]` | ○ | `id`・`name`・`look_ja`・`look_en`。最大3人。H3-Image では任意で `ref_image`（立ち絵の画像のパス） |
 | `panels[]` | ○ | テンプレートのコマ数分を読む順に。下の表 |
 
 | panels の項目 | 必須 | 内容 |
@@ -154,8 +179,8 @@ ffmpeg -i spread.png -vf "crop=iw/2:ih:0:0" page2.png
 ## 仕上げに伝えること
 
 1. 決まった内容の要約（タイトル・起承転結を各1行・キャラ）
-2. 作ったファイルのパス（spec.json・name.svg・moss-draft.json）
-3. MOSS で仕上げたプロンプト（moss-image-prompt-craft の納品フォーマット）
+2. 作ったファイルのパス（spec.json・name.svg・moss-draft.json か h3-image.md）
+3. 仕上げたプロンプト（MOSS は moss-image-prompt-craft の納品フォーマット、H3-Image は h3-image.md の中身）
 4. 次の一手を1つ（例: 「文字が崩れたら、吹き出しの台詞を短くして再生成」）
 
 ## 保守
