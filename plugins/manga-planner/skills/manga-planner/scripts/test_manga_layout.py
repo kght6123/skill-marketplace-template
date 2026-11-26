@@ -9,13 +9,30 @@ SPEC = importlib.util.spec_from_file_location("manga_layout", HERE / "manga_layo
 M = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(M)
 
-EXAMPLE = HERE.parent / "examples" / "neko-satsuei.spec.json"
+EXAMPLES = HERE.parent / "examples"
+EXAMPLE = EXAMPLES / "neko-satsuei.spec.json"
 MOSS_COMPILER = (HERE.parents[3] / "moss-image-prompt-craft" / "skills" / "moss-image-prompt-craft"
                  / "scripts" / "compile_prompt.py")
 
 
 def load_example():
     return json.loads(EXAMPLE.read_text(encoding="utf-8"))
+
+
+def reading_order_ok(panels, reading):
+    """日本式の読み順になっているか。columns: 右の列から上→下。rows: 上の段から右→左。"""
+    def key(b):
+        cx, cy = (b[0] + b[2]) / 2, (b[1] + b[3]) / 2
+        return (-cx, cy) if reading == "columns" else None
+    if reading == "columns":
+        return panels == sorted(panels, key=key)
+    for a, b in zip(panels, panels[1:]):
+        same_row = a[1] < b[3] and b[1] < a[3]
+        if same_row and not b[2] <= a[0]:
+            return False
+        if not same_row and not b[1] >= a[3]:
+            return False
+    return True
 
 
 class LayoutTemplateTests(unittest.TestCase):
@@ -25,13 +42,19 @@ class LayoutTemplateTests(unittest.TestCase):
                 W, H = lay["width"], lay["height"]
                 self.assertEqual(W % 16, 0)
                 self.assertEqual(H % 16, 0)
-                boxes = list(lay["panels"]) + ([lay["title"]] if lay["title"] else [])
-                for x0, y0, x1, y1 in boxes:
-                    self.assertTrue(0 <= x0 < x1 <= W and 0 <= y0 < y1 <= H)
-                ps = sorted(lay["panels"], key=lambda b: b[1])
-                for a, b in zip(ps, ps[1:]):
-                    self.assertLessEqual(a[3], b[1])
-                self.assertEqual(len(lay["panels"]), len(M.ROLES[lay["format"]]))
+                self.assertLessEqual(W * H, 4 * 1024 * 1024)  # MOSS の上限 4M 画素
+                for page in lay["pages"]:
+                    boxes = page["panels"] + page["titles"]
+                    for x0, y0, x1, y1 in boxes:
+                        self.assertTrue(0 <= x0 < x1 <= W and 0 <= y0 < y1 <= H)
+                    for i, a in enumerate(boxes):
+                        for b in boxes[i + 1:]:
+                            overlap = a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+                            self.assertFalse(overlap, (a, b))
+                    self.assertTrue(reading_order_ok(page["panels"], lay["reading"]))
+                roles = M.FORMATS[lay["format"]]["roles"]
+                if isinstance(roles, list):
+                    self.assertEqual(len(M.panel_boxes(lay)), len(roles))
 
 
 class CheckTests(unittest.TestCase):
@@ -74,7 +97,7 @@ class CheckTests(unittest.TestCase):
 
     def test_title_required_for_title_layout(self):
         del self.spec["title"]
-        self.assertTrue(any("title を入れて" in e for e in self.errors(self.spec)))
+        self.assertTrue(any("title を文字列で" in e for e in self.errors(self.spec)))
         self.spec["layout"] = "yonkoma-plain"
         self.assertEqual(self.errors(self.spec), [])
 
@@ -109,7 +132,7 @@ class PlacementTests(unittest.TestCase):
         self.assertEqual(first["speaker_side"], "right")
 
     def test_boxes_stay_inside_their_panel(self):
-        for name in ("yonkoma-title", "yonkoma-plain", "yonkoma-slim"):
+        for name in [k for k, v in self.layouts.items() if v["format"] == "yonkoma"]:
             spec = copy.deepcopy(self.spec)
             spec["layout"] = name
             for pl in M.place(spec, self.layouts[name]):
@@ -120,13 +143,44 @@ class PlacementTests(unittest.TestCase):
                         self.assertTrue(x0 <= bx0 < bx1 <= x1 and y0 <= by0 < by1 <= y1)
 
 
+class HachikomaTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+        self.spec = json.loads((EXAMPLES / "zaitaku.spec.json").read_text(encoding="utf-8"))
+
+    def test_example_is_valid(self):
+        self.assertEqual(M.check(self.spec, self.layouts)[0], [])
+
+    def test_each_strip_needs_kishotenketsu(self):
+        self.spec["panels"][4]["role"] = "sho"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("5コマ目" in e and "'ki'" in e for e in errors))
+
+    def test_two_titles_required(self):
+        self.spec["title"] = "ひとつだけ"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("2 個のリスト" in e for e in errors))
+
+    def test_right_strip_is_read_first(self):
+        placed = M.place(self.spec, self.layouts["hachikoma-title"])
+        self.assertGreater(placed[0]["bbox"][0], placed[4]["bbox"][2])
+
+    def test_moss_draft_titles_and_caption(self):
+        drafts = M.moss_drafts(self.spec, self.layouts)
+        self.assertEqual(len(drafts), 1)
+        texts = [i["text"] for i in drafts[0]["items"] if i["label"] == "text"]
+        self.assertEqual(texts[:2], ["オンライン会議", "昼休み"])
+        self.assertIn("right strip first", drafts[0]["summary"]["caption"])
+        self.assertEqual(sum(1 for i in drafts[0]["items"] if i["label"] == "object"), 8)
+
+
 class OutputTests(unittest.TestCase):
     def setUp(self):
         self.layouts = M.load_layouts()
         self.spec = load_example()
 
     def test_moss_draft_keeps_dialogue_verbatim(self):
-        draft = M.moss_draft(self.spec, self.layouts)
+        draft = M.moss_drafts(self.spec, self.layouts)[0]
         texts = [i["text"] for i in draft["items"] if i["label"] == "text"]
         for p in self.spec["panels"]:
             for b in p.get("balloons", []):
@@ -139,8 +193,12 @@ class OutputTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("compile_prompt", MOSS_COMPILER)
         compiler = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(compiler)
-        result = json.loads(compiler.compile_prompt(M.moss_draft(self.spec, self.layouts)))
-        self.assertEqual(result["bbox_format"], "yxyx")
+        for name in sorted(EXAMPLES.glob("*.spec.json")):
+            spec = json.loads(name.read_text(encoding="utf-8"))
+            for draft in M.moss_drafts(spec, self.layouts):
+                with self.subTest(example=name.name):
+                    result = json.loads(compiler.compile_prompt(draft))
+                    self.assertEqual(result["bbox_format"], "yxyx")
 
     def test_preview_escapes_text(self):
         self.spec["panels"][0]["balloons"][0]["text"] = "<&>"
