@@ -1,6 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="768" height="2048" viewBox="0 0 768 2048" font-family="Hiragino Sans, 'Noto Sans JP', 'Yu Gothic', sans-serif">
-<rect width="768" height="2048" fill="#ddd"/>
-<g transform="translate(0,0)"><rect width="768" height="2048" fill="#fff"/>
+<rect width="768" height="2048" fill="#fff"/>
 <text x="384" y="104" font-size="56" text-anchor="middle" dominant-baseline="middle" font-weight="bold" fill="#000">ねこ撮影</text>
 <rect x="48" y="192" width="672" height="432" fill="none" stroke="#000" stroke-width="6"/>
 <rect x="384" y="305" width="319" height="302" fill="#f4f4f4" stroke="#aaa" stroke-dasharray="10 6" stroke-width="2"/>
@@ -45,5 +44,4 @@
 <text x="602" y="1645" font-size="30" text-anchor="middle" dominant-baseline="middle" font-weight="normal" fill="#000">…撮れた</text>
 <rect x="51" y="1982" width="666" height="31" fill="#fff" fill-opacity="0.85"/>
 <text x="60" y="1998" font-size="17" text-anchor="start" dominant-baseline="middle" font-weight="normal" fill="#666">4 結｜bust / eye-level｜頭に猫を乗せたまま自撮り</text>
-</g>
 </svg>

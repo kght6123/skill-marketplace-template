@@ -1,13 +1,13 @@
 ---
 name: manga-planner
-description: 漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ漫画（起承転結・コマ割り・ショット・台詞・吹き出し・擬音）を設計できる対話型スキル。設計書（spec.json）とネーム画像（SVG）を作り、MOSS-Image 用の Layout 下書きに変換して moss-image-prompt-craft に渡す。ユーザーが「漫画を作りたい」「4コマを作りたい」「4コマ漫画の設計」「8コマ漫画」「ネームを作って」「コマ割りを考えて」「漫画の話を考えて」「MOSSで4コマ漫画」「manga planner」などと言ったら必ず使う。画像生成AIで漫画を作る前に、話とコマ割りを固めたいときにも積極的に使う。
+description: 漫画に詳しくない人でも、選択肢を選んでいくだけで日本式の4コマ・8コマ・1ページ・2ページ漫画（起承転結・コマ割り・ショット・台詞・吹き出し・擬音）を設計できる対話型スキル。設計書（spec.json）とネーム画像（SVG）を作り、MOSS-Image 用の Layout 下書きに変換して moss-image-prompt-craft に渡す。ユーザーが「漫画を作りたい」「4コマを作りたい」「4コマ漫画の設計」「8コマ漫画」「1ページ漫画」「2ページ漫画」「見開き」「ネームを作って」「コマ割りを考えて」「漫画の話を考えて」「MOSSで4コマ漫画」「manga planner」などと言ったら必ず使う。画像生成AIで漫画を作る前に、話とコマ割りを固めたいときにも積極的に使う。
 ---
 
 # 漫画プランナー
 
 ユーザーは漫画に詳しくない。**考えるのは Claude、ユーザーは選ぶだけ**。各ステップで候補を出し、選んでもらって次へ進む。出来上がるのは画像ではなく、モデルに依存しない **漫画の設計書（spec.json）** と、その確認用の **ネーム画像（SVG）** 。生成用のプロンプトは設計書から作る。
 
-現在の対応: **4コマ・8コマ（4コマ×2列）** ／ 出力先 **MOSS-Image**。1ページ・2ページ、MiniMax-H3-Image・H3 への出力はまだない。頼まれたらそう伝え、対応している形式で作るか聞く。
+現在の対応: **4コマ・8コマ（4コマ×2列）・1ページ・2ページ** ／ 出力先 **MOSS-Image**。MiniMax-H3-Image・H3 への出力はまだない。頼まれたらそう伝え、MOSS 用で作るか聞く。2ページは横長の1枚（2304×1632）で生成し、あとで中央で左右に切る。
 
 ## 選択肢の出し方
 
@@ -19,23 +19,28 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 
 ### Step 1: 基本設定（1回でまとめて聞く）
 
-題材がメッセージに書いてあればそれを使う（なければ Step 3 でジャンルから考える）。
+題材がメッセージに書いてあればそれを使う（なければ Step 3 で引く）。4つの質問を1回の AskUserQuestion で聞く。形式とコマ割りは **1つの質問** で決め、質問を2往復にしない。
 
 | 質問 | 選択肢 |
 |---|---|
-| 形式 | 4コマ（迷ったらこれ）／8コマ（4コマ×2列） |
-| ジャンル | ギャグ／日常／ラブコメ／解説（ちょっとシリアスは Other で） |
-| オチの型 | ボケ／どんでん返し／ほっこり／ツッコミ（説明は `references/story-structures.md` §2） |
-| 色 | モノクロ＋トーン（王道）／フルカラー |
+| 形式とコマ割り | 4コマ（縦・タイトルあり `yonkoma-title`）／8コマ（4コマ×2列 `hachikoma-title`）／1ページ（基本の6コマ `page-basic-6`）／2ページ（最初とオチが大ゴマ `spread-open-end-10`） |
+| ジャンル | `pick.py --category genre --n 4` で引いた4つ |
+| オチの型 | `pick.py --category ending --n 4` で引いた4つ |
+| 色 | モノクロ／フルカラー（細かい画風は Step 5） |
 
-形式が決まったら、`assets/layouts.json` のうちその `format` のテンプレートを、`label_ja` と `note_ja` で選択肢にして聞く。
+候補を引くコマンド（`<このスキルのディレクトリ>` は SKILL.md のあるディレクトリの絶対パス）:
 
-| 形式 | テンプレート |
-|---|---|
-| 4コマ（`yonkoma`） | `yonkoma-title` 縦・タイトルあり（迷ったらこれ）／`yonkoma-plain` 縦・タイトルなし／`yonkoma-slim` 細長 |
-| 8コマ（`hachikoma`） | `hachikoma-title` 2列・列ごとにタイトル／`hachikoma-plain` 2列・タイトルなし |
+```bash
+python3 -I <このスキルのディレクトリ>/scripts/pick.py --category genre --n 4
+python3 -I <このスキルのディレクトリ>/scripts/pick.py --category ending --n 4
+```
 
-8コマは、さらに「2本立て（別々の4コマを2本）」か「前後編（1本目のオチが2本目の起になる）」かを聞く（`story-structures.md` §6）。
+- 出力は1行1候補の TSV（category, key, ja_name, description, en）。label に `ja_name`、description に `description` を入れる。spec の `genre` / `ending` には `key` を入れる
+- 「Other」欄で「別の候補」と打てば、その質問だけ `--exclude` に出した key を入れて引き直す。自由入力の希望はそのまま使う
+- スクリプトが使えない環境では `references/catalog.tsv` を読み、自分でランダムに選ぶ
+- SNSに載せると言われていたら、1ページの選択肢を「正方形のコマ4つ（SNS向け `page-square-4`）」に入れ替える
+- メッセージに見せ方の希望があれば、その希望に合うテンプレートを選択肢に入れる（例:「オチを大きく」→ `page-big-ending-5`、「見開きの大ゴマ」→ `spread-climax-8`、「横長のバナー」→ `yonkoma-wide`）
+- 8コマの組み立て（2本立て／前後編）と、2ページの見せ方（見開き `spread`／めくり `turn`）は、ここでは聞かない。Step 3 のネタ案で決める
 
 ### Step 2: 登場人物
 
@@ -50,7 +55,18 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 
 ### Step 3: ネタを選ぶ
 
-`references/story-structures.md` を読み、**3案** をそれぞれ「タイトル＋起・承・転・結を各1行（台詞つき）」で作る。8コマなら1案に2本分（右の列→左の列）を書く。選択肢は3案＋「別の3案を出して」。選ばれた案の一部だけ直したいと言われたら、そこだけ直して再提示する。
+ネタの材料をランダムに引き、`references/story-structures.md` の型で **3案** に組み立てる。3案は材料の組み合わせを変え、似た話にしない。
+
+```bash
+python3 -I <このスキルのディレクトリ>/scripts/pick.py --category theme   --n 3   # 題材（ユーザーが題材を言っていれば引かない）
+python3 -I <このスキルのディレクトリ>/scripts/pick.py --category setting --n 3   # 舞台
+python3 -I <このスキルのディレクトリ>/scripts/pick.py --category twist   --n 3   # 転の仕掛け
+```
+
+- 1案に、題材・舞台・転の仕掛けを1つずつ使う。案の頭に使った材料を短く書く（例「題材: こたつ／舞台: 和室／仕掛け: 動物のしわざ」）。Step 1 のジャンルとオチの型は全案に使う
+- 各案は「タイトル＋起・承・転・結を各1行（台詞つき）」。8コマなら1案に2本分（右の列→左の列）。1ページ・2ページなら、テンプレートのコマ数に合わせて各コマ1行で書き、大ゴマに何を描くかを先に決める（`story-structures.md` §7・§8）
+- 8コマと2ページでは、各案の頭に組み立ても書く。8コマは「2本立て」か「前後編」（§6）、2ページは「見開き」か「めくり」（§8）。案ごとに話に合うほうを Claude が決め、選ばれた案のものを spec に使う（2ページは `page_turn`）。`spread-climax-8` は見開き専用なので、全案を見開きにする
+- 選択肢は3案＋「別の3案を出して」。「別の3案」なら、出した材料の key を `--exclude` に入れて引き直す。選ばれた案の一部だけ直したいと言われたら、そこだけ直して再提示する
 
 ### Step 4: コマの演出を確認する
 
@@ -63,11 +79,11 @@ AskUserQuestion がある環境では、それで出す（1回に最大4問、�
 
 ### Step 5: 画風
 
-選択肢: きれいな線＋グレートーン（モノクロの王道）／アニメ塗りのフルカラー／やわらかい水彩風／art-style-picker で選ぶ。Step 1 の色と矛盾しないものだけ出す。選んだ画風を英語1文にして `style_en` に入れる。
+`pick.py --category style --n 3` で画風を3つ引き、「art-style-picker で選ぶ」を加えて4択にする。Step 1 の色と合わないもの（モノクロなのにフルカラーの画風など）は引き直す。選ばれた行の `en` 列を `style_en` に入れる。「別の候補」なら除外付きで引き直す。
 
 ### Step 6: 設計書とネームを作る
 
-1. 作業ディレクトリに `manga/<題材の英小文字スラッグ>/spec.json` を書く。書式は作例（4コマ `examples/neko-satsuei.spec.json`、8コマ `examples/zaitaku.spec.json`）と下の「spec の項目」に合わせる
+1. 作業ディレクトリに `manga/<題材の英小文字スラッグ>/spec.json` を書く。書式は作例（4コマ `examples/neko-satsuei.spec.json`、8コマ `examples/zaitaku.spec.json`、1ページ `examples/jisui.spec.json`、2ページ `examples/amagasa.spec.json`）と下の「spec の項目」に合わせる
 2. 同梱スクリプトで検査とネーム出力をする。スクリプトのパスは作業ディレクトリではなく、この SKILL.md のあるディレクトリから解決し、絶対パスで実行する:
 
 ```bash
@@ -76,7 +92,14 @@ python3 -I <このスキルのディレクトリ>/scripts/manga_layout.py previe
 ```
 
 3. 「エラー」が出たら spec を直して再実行する。台詞が長すぎるエラーは、勝手に削らず、改行・吹き出しの分割・言い換えの候補を選択肢で出す。「注意」は直すか、意図どおりなら残す
-4. `name.svg` をユーザーに見せる（画像として送れる環境なら送る）。ネームでは、灰色の点線の箱がキャラの位置、楕円が吹き出し、赤字が擬音、下の灰色の文字がコマ番号・役割・演出
+4. `name.svg` をユーザーに見せる（画像として送れる環境なら送る）。ネームでは、灰色の点線の箱がキャラの位置、楕円が吹き出し（雲形は心の声）、赤字が擬音、下の灰色の文字がコマ番号・役割・演出。コマに収まらないメモは「…」で省略される（SVG をブラウザで開き、文字にマウスを乗せると全文が出る）
+5. 選択肢: このままでOK／コマ割りを変える／台詞や演出を直す。「コマ割りを変える」なら、同じ形式のテンプレートを3つ引いて選択肢にする（4つ目は「別の候補」）。正方形を使っているなら `--square`、そうでなければ `--no-square` を付ける:
+
+   ```bash
+   python3 -I <このスキルのディレクトリ>/scripts/pick.py --layouts --format <format> --n 3 --exclude <今の layout>
+   ```
+
+   出力は format, key, label_ja, note_ja, コマ数。2ページは、1ページのテンプレートの組み合わせ（`spread-<1ページ目>--<2ページ目>`）も出る。コマ数が変わるときは、コマの配分を直して Step 4 の表を見せ直し、Step 6 をやり直す
 
 ### Step 7: 生成用に変換する（MOSS-Image）
 
@@ -90,13 +113,23 @@ python3 -I <このスキルのディレクトリ>/scripts/manga_layout.py moss s
 npx skills add kght6123/skill-marketplace-template --skill moss-image-prompt-craft
 ```
 
+2ページは、2ページ分を横長の1枚（2304×1632）として生成する。1枚で生成するので、ページの間でキャラの見た目がずれにくい。生成した画像を中央で左右に切り、**右半分を1ページ目、左半分を2ページ目** にする（どちらも 1152×1632、普通の漫画のページと同じ縦横比）。ネームの赤い点線が切る位置。切るコマンドの例（ffmpeg）:
+
+```bash
+ffmpeg -i spread.png -vf "crop=iw/2:ih:iw/2:0" page1.png
+ffmpeg -i spread.png -vf "crop=iw/2:ih:0:0" page2.png
+```
+
+`spread-climax-8` の下半分の大ゴマは、切ると2ページに分かれる（本の見開きと同じ）。
+
 コマ割り・台詞・演出を直すときは、`moss-draft.json` ではなく **spec.json を直して Step 6 から再実行** する（座標はスクリプトが毎回計算し直す）。
 
 ## spec の項目
 
 | 項目 | 必須 | 内容 |
 |---|---|---|
-| `format` | ○ | `yonkoma` / `hachikoma` |
+| `format` | ○ | `yonkoma` / `hachikoma` / `page` / `spread` |
+| `page_turn` | 2ページは○ | `spread`（見開き）/ `turn`（めくり） |
 | `layout` | ○ | `assets/layouts.json` のキー（その format 用のもの） |
 | `title` | タイトル枠ありなら○ | 画像に描くタイトル（日本語のまま）。枠が1つなら文字列、2つ以上なら読む順のリスト（8コマは右の列が先） |
 | `genre` / `ending` | | 記録用（`story-structures.md` の値） |
@@ -107,7 +140,7 @@ npx skills add kght6123/skill-marketplace-template --skill moss-image-prompt-cra
 
 | panels の項目 | 必須 | 内容 |
 |---|---|---|
-| `role` | ○ | 4コマは順に `ki` `sho` `ten` `ketsu`。8コマはそれを2回（右の列、左の列） |
+| `role` | ○ | 4コマは順に `ki` `sho` `ten` `ketsu`。8コマはそれを2回（右の列、左の列）。1ページ・2ページは起→承→転→結の順で、同じ役割が続いてよい（4つとも1コマ以上。2ページは2ページ通しで数える） |
 | `beat_ja` | ○ | そのコマで起きることを日本語1行 |
 | `shot` / `angle` | shotは○ | `direction.md` §1・§2 の値（angle 既定は `eye-level`） |
 | `background_en` | 起は推奨 | 場所・背景を英語で |
@@ -127,5 +160,6 @@ npx skills add kght6123/skill-marketplace-template --skill moss-image-prompt-cra
 
 ## 保守
 
-- コマ割りを増やすときは `assets/layouts.json` にテンプレートを足す（幅・高さは16の倍数、座標は左上原点のピクセル `[x0, y0, x1, y1]`）
+- コマ割りを増やすときは `assets/layouts.json` にテンプレートを足す（幅・高さは16の倍数、座標は左上原点のピクセル `[x0, y0, x1, y1]`）。1ページのテンプレート（正方形以外）を足すと、2ページの組み合わせも自動で増える
+- 選択肢の候補を増やすときは `references/catalog.tsv` に行を足すだけでよい（列: category, key, ja_name, description, en。en は style だけ必須）
 - テスト: `python3 -I scripts/test_manga_layout.py`

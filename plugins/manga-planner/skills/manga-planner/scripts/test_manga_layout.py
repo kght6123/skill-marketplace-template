@@ -43,15 +43,23 @@ class LayoutTemplateTests(unittest.TestCase):
                 self.assertEqual(W % 16, 0)
                 self.assertEqual(H % 16, 0)
                 self.assertLessEqual(W * H, 4 * 1024 * 1024)  # MOSS の上限 4M 画素
+                boxes = [b for page in lay["pages"] for b in page["panels"] + page["titles"]]
+                for x0, y0, x1, y1 in boxes:
+                    self.assertTrue(0 <= x0 < x1 <= W and 0 <= y0 < y1 <= H)
+                for i, a in enumerate(boxes):
+                    for b in boxes[i + 1:]:
+                        overlap = a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
+                        self.assertFalse(overlap, (a, b))
                 for page in lay["pages"]:
-                    boxes = page["panels"] + page["titles"]
-                    for x0, y0, x1, y1 in boxes:
-                        self.assertTrue(0 <= x0 < x1 <= W and 0 <= y0 < y1 <= H)
-                    for i, a in enumerate(boxes):
-                        for b in boxes[i + 1:]:
-                            overlap = a[0] < b[2] and b[0] < a[2] and a[1] < b[3] and b[1] < a[3]
-                            self.assertFalse(overlap, (a, b))
                     self.assertTrue(reading_order_ok(page["panels"], lay["reading"]))
+                if lay.get("fold"):
+                    mid = W / 2
+                    for pi, page in enumerate(lay["pages"]):
+                        for b in page["panels"]:
+                            if b[0] < mid < b[2]:
+                                continue  # ページをまたぐ大ゴマ
+                            # 1ページ目は右半分、2ページ目は左半分
+                            self.assertTrue(b[0] >= mid if pi == 0 else b[2] <= mid, (name, b))
                 roles = M.FORMATS[lay["format"]]["roles"]
                 if isinstance(roles, list):
                     self.assertEqual(len(M.panel_boxes(lay)), len(roles))
@@ -166,12 +174,185 @@ class HachikomaTests(unittest.TestCase):
         self.assertGreater(placed[0]["bbox"][0], placed[4]["bbox"][2])
 
     def test_moss_draft_titles_and_caption(self):
-        drafts = M.moss_drafts(self.spec, self.layouts)
-        self.assertEqual(len(drafts), 1)
-        texts = [i["text"] for i in drafts[0]["items"] if i["label"] == "text"]
+        draft = M.moss_draft(self.spec, self.layouts)
+        texts = [i["text"] for i in draft["items"] if i["label"] == "text"]
         self.assertEqual(texts[:2], ["オンライン会議", "昼休み"])
-        self.assertIn("right strip first", drafts[0]["summary"]["caption"])
-        self.assertEqual(sum(1 for i in drafts[0]["items"] if i["label"] == "object"), 8)
+        self.assertIn("right strip first", draft["summary"]["caption"])
+        self.assertEqual(sum(1 for i in draft["items"] if i["label"] == "object"), 8)
+
+
+class PageTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+        self.spec = json.loads((EXAMPLES / "jisui.spec.json").read_text(encoding="utf-8"))
+
+    def test_example_is_valid(self):
+        self.assertEqual(M.check(self.spec, self.layouts)[0], [])
+
+    def test_roles_must_not_go_backwards(self):
+        self.spec["panels"][3]["role"] = "sho"
+        self.spec["panels"][2]["role"] = "ten"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("起→承→転→結の順" in e for e in errors))
+
+    def test_all_four_roles_required(self):
+        for p in self.spec["panels"][1:4]:
+            p["role"] = "sho"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("転 がありません" in e for e in errors))
+
+    def test_big_panel_used_for_sho_warns(self):
+        self.spec["layout"] = "page-big-opening-5"
+        self.spec["panels"][0]["role"] = "ki"
+        roles = ["sho", "sho", "sho", "ten", "ketsu"]
+        for p, r in zip(self.spec["panels"], roles):
+            p["role"] = r
+        self.spec["panels"][0]["role"] = "ki"
+        self.assertEqual(M.check(self.spec, self.layouts)[1], [])
+        self.spec["layout"] = "page-big-ending-5"
+        self.spec["panels"][4]["role"] = "sho"
+        self.spec["panels"][3]["role"] = "sho"
+        warnings = M.check(self.spec, self.layouts)[1]
+        self.assertTrue(any("大ゴマ" in w for w in warnings))
+
+    def test_panel_count_follows_template(self):
+        self.spec["layout"] = "page-basic-6"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("6 コマ必要" in e for e in errors))
+
+    def test_moss_caption_describes_page(self):
+        draft = M.moss_draft(self.spec, self.layouts)
+        self.assertIn("single Japanese manga page with 5 panels", draft["summary"]["caption"])
+        self.assertEqual((draft["width"], draft["height"]), (1440, 2032))
+
+
+class SquarePageTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+        self.spec = load_example()  # 4コマの作例を正方形1ページに流し込む
+        self.spec["format"] = "page"
+        del self.spec["title"]
+
+    def test_sns_template_has_four_square_panels(self):
+        panels = self.layouts["page-square-4"]["pages"][0]["panels"]
+        sizes = {(b[2] - b[0], b[3] - b[1]) for b in panels}
+        self.assertEqual(len(panels), 4)
+        self.assertEqual(len(sizes), 1)
+        w, h = sizes.pop()
+        self.assertEqual(w, h)
+
+    def test_four_panel_story_fits_every_square_template(self):
+        for name in ("page-square-4", "page-square-big-ending-4", "page-square-big-opening-4"):
+            with self.subTest(layout=name):
+                self.spec["layout"] = name
+                self.assertEqual(M.check(self.spec, self.layouts)[0], [])
+                draft = M.moss_draft(self.spec, self.layouts)
+                self.assertEqual((draft["width"], draft["height"]), (1536, 1536))
+                self.assertIn("single square Japanese manga page", draft["summary"]["caption"])
+
+
+class SpreadTests(unittest.TestCase):
+    def setUp(self):
+        self.layouts = M.load_layouts()
+        self.spec = json.loads((EXAMPLES / "amagasa.spec.json").read_text(encoding="utf-8"))
+
+    def warnings(self):
+        errors, warnings = M.check(self.spec, self.layouts)
+        self.assertEqual(errors, [])
+        return warnings
+
+    def test_example_is_valid_without_warnings(self):
+        self.assertEqual(self.warnings(), [])
+
+    def test_page_turn_value(self):
+        self.spec["page_turn"] = "flip"
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("page_turn" in e for e in errors))
+
+    def test_turn_wants_twist_after_the_turn(self):
+        self.spec["panels"][5]["role"] = "sho"
+        self.assertTrue(any("めくり" in w for w in self.warnings()))
+
+    def test_spread_hides_punchline_on_first_page(self):
+        self.spec["page_turn"] = "spread"
+        self.assertEqual(self.warnings(), [])
+        self.spec["panels"][3]["role"] = "ten"
+        for p in self.spec["panels"][4:]:
+            p["role"] = "ketsu"
+        self.assertTrue(any("見開き" in w for w in self.warnings()))
+
+    def test_one_wide_draft_with_both_pages(self):
+        draft = M.moss_draft(self.spec, self.layouts)
+        self.assertEqual((draft["width"], draft["height"]), (2304, 1632))
+        self.assertIn("right half is page 1", draft["summary"]["caption"])
+        objects = [i for i in draft["items"] if i["label"] == "object"]
+        self.assertEqual(len(objects), 10)
+        self.assertGreaterEqual(objects[0]["bbox"][0], 1152)  # 1コマ目は右ページ
+        self.assertLessEqual(objects[5]["bbox"][2], 1152)     # 6コマ目は左ページ
+
+    def test_spanning_panel_needs_spread_mode(self):
+        self.spec["layout"] = "spread-climax-8"
+        self.spec["panels"] = self.spec["panels"][:3] + self.spec["panels"][5:]
+        roles = ["ki", "ki", "sho", "ten", "ten", "ten", "ketsu", "ketsu"]
+        for p, r in zip(self.spec["panels"], roles):
+            p["role"] = r
+        errors = M.check(self.spec, self.layouts)[0]
+        self.assertTrue(any("ページをまたぐコマ" in e for e in errors))
+        self.spec["page_turn"] = "spread"
+        self.assertEqual(M.check(self.spec, self.layouts)[0], [])
+        draft = M.moss_draft(self.spec, self.layouts)
+        self.assertIn("spans across both pages", draft["summary"]["caption"])
+
+    def test_preview_shows_fold(self):
+        svg = M.preview_svg(self.spec, self.layouts)
+        self.assertIn("p1（めくり前）", svg)
+        self.assertIn('x1="1152"', svg)
+
+
+PICK = importlib.util.spec_from_file_location("pick", HERE / "pick.py")
+P = importlib.util.module_from_spec(PICK)
+PICK.loader.exec_module(P)
+
+
+class PickTests(unittest.TestCase):
+    def test_catalog_is_large_enough_and_keys_are_unique(self):
+        rows = P.load_catalog()
+        minimum = {"genre": 12, "ending": 12, "theme": 30, "setting": 15, "twist": 15, "style": 10}
+        for cat, n in minimum.items():
+            keys = [r["key"] for r in rows if r["category"] == cat]
+            with self.subTest(category=cat):
+                self.assertGreaterEqual(len(keys), n)
+                self.assertEqual(len(keys), len(set(keys)))
+        for r in rows:
+            if r["category"] == "style":
+                self.assertTrue(r["en"] and M.is_ascii(r["en"]), r["key"])
+
+    def test_exclude_is_respected(self):
+        keys = [r["key"] for r in P.load_catalog() if r["category"] == "ending"]
+        picked = P.pick_catalog("ending", 99, set(keys[:5]))
+        self.assertEqual(len(picked), len(keys) - 5)
+        self.assertTrue(all(r["key"] not in keys[:5] for r in picked))
+
+    def test_layout_pick_filters_format_and_square(self):
+        rows = P.pick_layouts("page", 99, set(), square=True)
+        self.assertTrue(rows and all(lay["width"] == lay["height"] for _, lay in rows))
+        rows = P.pick_layouts("page", 99, {"page-basic-6"}, square=False)
+        self.assertTrue(all(k != "page-basic-6" and lay["width"] != lay["height"] for k, lay in rows))
+
+    def test_generated_spreads_cover_every_page_pair(self):
+        layouts = M.load_layouts()
+        pages = [k for k, v in layouts.items() if v["format"] == "page" and v["width"] != v["height"]]
+        spreads = [k for k, v in layouts.items() if v.get("generated")]
+        self.assertGreaterEqual(len(pages), 10)
+        self.assertGreaterEqual(len(spreads) + 4, len(pages) ** 2)
+
+    def test_wide_yonkoma_caption_reads_right_to_left(self):
+        spec = load_example()
+        spec["layout"] = "yonkoma-wide"
+        del spec["title"]
+        layouts = M.load_layouts()
+        self.assertEqual(M.check(spec, layouts)[0], [])
+        self.assertIn("read from right to left", M.moss_draft(spec, layouts)["summary"]["caption"])
 
 
 class OutputTests(unittest.TestCase):
@@ -180,7 +361,7 @@ class OutputTests(unittest.TestCase):
         self.spec = load_example()
 
     def test_moss_draft_keeps_dialogue_verbatim(self):
-        draft = M.moss_drafts(self.spec, self.layouts)[0]
+        draft = M.moss_draft(self.spec, self.layouts)
         texts = [i["text"] for i in draft["items"] if i["label"] == "text"]
         for p in self.spec["panels"]:
             for b in p.get("balloons", []):
@@ -195,10 +376,27 @@ class OutputTests(unittest.TestCase):
         spec.loader.exec_module(compiler)
         for name in sorted(EXAMPLES.glob("*.spec.json")):
             spec = json.loads(name.read_text(encoding="utf-8"))
-            for draft in M.moss_drafts(spec, self.layouts):
-                with self.subTest(example=name.name):
-                    result = json.loads(compiler.compile_prompt(draft))
-                    self.assertEqual(result["bbox_format"], "yxyx")
+            with self.subTest(example=name.name):
+                result = json.loads(compiler.compile_prompt(M.moss_draft(spec, self.layouts)))
+                self.assertEqual(result["bbox_format"], "yxyx")
+
+    def test_thought_balloon_is_a_cloud(self):
+        self.spec["panels"][0]["balloons"][0]["type"] = "thought"
+        pl = M.place(self.spec, self.layouts["yonkoma-title"])[0]
+        svg = "".join(M.panel_svg(pl))
+        self.assertGreaterEqual(svg.count("<circle"), 10)  # 縁の円8個以上＋しっぽの丸2個
+        self.assertNotRegex(svg, r'<ellipse[^>]*stroke="#000"')  # 普通の楕円の吹き出しを描いていない
+
+    def test_long_notes_are_shortened_inside_the_panel(self):
+        long_note = "とても長い注記がここに入ってコマの幅をこえてしまう場合のテスト用の文章です"
+        self.spec["panels"][0]["cast"][0]["acting_ja"] = long_note
+        self.spec["panels"][0]["beat_ja"] = long_note * 2
+        pl = M.place(self.spec, self.layouts["yonkoma-title"])[0]
+        svg = "".join(M.panel_svg(pl))
+        self.assertIn("…</text>", svg)
+        self.assertIn(f"<title>{long_note}</title>", svg)
+        x0, _, x1, _ = pl["figures"][0]["bbox"]
+        self.assertLessEqual(M.text_width(M.fit_text(long_note, x1 - x0 - 12, 18), 18), x1 - x0 - 12)
 
     def test_preview_escapes_text(self):
         self.spec["panels"][0]["balloons"][0]["text"] = "<&>"
